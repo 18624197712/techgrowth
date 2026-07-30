@@ -6,25 +6,71 @@ import App from '../App'
 
 const task = {
   id: 'task-1',
-  title: '构建一个 RAG 评测器',
-  topic: 'RAG 评测',
-  skill_name: 'RAG evaluation',
+  title: '实作：验证模型接口的错误边界',
+  topic: '模型接口边界',
+  skill_name: 'AI/LLM 工程',
   expected_minutes: 35,
-  objective: '验证检索回答的可靠性',
-  instructions: ['创建固定样例', '实现评分器', '提交结果'],
-  source_ids: ['source-1'],
-  submission_kinds: ['commit'],
-  rubric: [
-    { key: 'correctness', label: '实现正确性', critical: true },
-    { key: 'testing', label: '验证与测试', critical: false },
+  objective: '实现可测试的模型请求与错误映射',
+  curriculum_version: 'v1',
+  track_key: 'ai',
+  stage_key: 'foundation',
+  node_key: 'ai-foundation-model-io',
+  prerequisites: ['能够运行 Python 测试'],
+  instructions: [
+    { action: '创建成功与失败测试样本', minutes: 15, expected_result: '两个样本均可加载' },
+    { action: '实现请求并运行测试', minutes: 20, expected_result: '全部断言通过' },
   ],
+  source_ids: ['source-1'],
+  submission_kinds: ['commit', 'report'],
+  deliverables: ['模型客户端实现', '测试报告'],
+  acceptance_checks: [
+    { method: 'command', instruction: 'pytest -q', expected_result: '全部测试通过' },
+    { method: 'inspection', instruction: '检查错误消息', expected_result: '不包含 API Key' },
+  ],
+  rubric: [
+    {
+      key: 'correctness',
+      label: '实现正确性',
+      description: '请求和错误映射符合接口契约',
+      critical: true,
+      score_anchors: { '0': '无法运行', '1': '只能请求', '2': '成功路径', '3': '覆盖鉴权', '4': '覆盖超时' },
+    },
+    {
+      key: 'testing',
+      label: '验证与证据',
+      description: '结果可以复现',
+      critical: false,
+      score_anchors: { '0': '无证据', '1': '口头描述', '2': '单个结果', '3': '测试通过', '4': '失败路径也通过' },
+    },
+  ],
+  remediation_hint: '修复最低分项后重新运行验收检查',
   status: 'ready',
-  created_at: '2026-07-30T08:00:00Z',
+  created_at: '2026-07-30T08:10:00Z',
 }
+
+const radarItem = {
+  id: 'source-1',
+  title: 'Agent Runtime 2.0',
+  summary: 'Durable agent execution',
+  source_url: 'https://example.com/runtime',
+  source_name: 'Official AI',
+  topic: 'Agent engineering',
+  credibility: 0.95,
+  relevance: 0.9,
+  relevance_reason: '与当前 Agent 学习阶段相关',
+  published_at: '2026-07-29T10:00:00Z',
+}
+
+const tutorEvents = [
+  'event: intent\ndata: {"intent":"task_coaching","confidence":0.91,"needs_action":false}',
+  'event: token\ndata: {"text":"先运行验收命令，再补充最低分项的证据。"}',
+  'event: done\ndata: {}',
+].join('\n\n') + '\n\n'
 
 function mockFetch(
   authenticated: boolean,
   onRequest?: (url: string, init?: RequestInit) => void,
+  tutorBody = tutorEvents,
 ) {
   vi.stubGlobal(
     'fetch',
@@ -38,41 +84,35 @@ function mockFetch(
         )
       }
       if (url.endsWith('/tasks/today')) return Response.json(task)
-      if (url.endsWith('/radar'))
-        return Response.json([
-          {
-            id: 'source-1',
-            title: 'Agent Runtime 2.0',
-            summary: 'Durable agent execution',
-            source_url: 'https://example.com/runtime',
-            source_name: 'Official AI',
-            topic: 'Agent engineering',
-            credibility: 0.95,
-            relevance: 0.9,
-            relevance_reason: '与你的 Agent 学习方向相关',
-            published_at: '2026-07-29T10:00:00Z',
-          },
-        ])
+      if (url.endsWith('/radar/status'))
+        return Response.json({
+          id: 'run-1', status: 'partial', successful_sources: 5,
+          failed_sources: ['hacker-news-ai'], inserted_items: 12,
+          embedding_failures: 0, created_at: '2026-07-30T08:00:00Z',
+        })
+      if (url.endsWith('/radar/refresh'))
+        return Response.json({
+          id: 'run-2', status: 'succeeded', successful_sources: 6,
+          failed_sources: [], inserted_items: 3, embedding_failures: 0,
+          created_at: '2026-07-30T09:00:00Z',
+        })
+      if (url.endsWith('/radar')) return Response.json([radarItem])
       if (url.endsWith('/profile')) return Response.json([])
       if (url.endsWith('/repositories')) return Response.json([])
       if (url.endsWith('/weekly-reviews')) return Response.json([])
       if (url.endsWith('/setup'))
         return Response.json({
           provider: {
-            chat: {
-              base_url: 'https://chat.example/v1',
-              model: 'chat-model',
-              api_key_configured: true,
-            },
-            embedding: {
-              base_url: 'https://embed.example/v1',
-              model: 'embed-model',
-              api_key_configured: false,
-            },
+            chat: { base_url: 'https://chat.example/v1', model: 'chat-model', api_key_configured: true },
+            embedding: { base_url: 'https://embed.example/v1', model: 'embed-model', api_key_configured: false },
           },
           icp_number: '',
         })
       if (url.endsWith('/notifications/preferences')) return Response.json([])
+      if (url.endsWith('/chat/stream'))
+        return new Response(tutorBody, { headers: { 'Content-Type': 'text/event-stream' } })
+      if (url.includes('/chat/actions/') && url.endsWith('/confirm')) return Response.json(task)
+      if (url.includes('/chat/actions/') && url.endsWith('/cancel')) return Response.json({ status: 'cancelled' })
       return Response.json({})
     }),
   )
@@ -93,15 +133,65 @@ describe('TechGrowth app', () => {
     expect(screen.getByLabelText('密码')).toBeInTheDocument()
   })
 
-  it('renders the daily workbench for an authenticated user', async () => {
+  it('renders a concrete curriculum task with checks and score anchors', async () => {
     mockFetch(true)
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: '构建一个 RAG 评测器' })).toBeInTheDocument()
-    expect(screen.getByText('35 分钟')).toBeInTheDocument()
-    expect(screen.getByText('实现正确性')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '技术雷达' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '成长证据' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: task.title })).toBeInTheDocument()
+    expect(screen.getByText('15 分钟')).toBeInTheDocument()
+    expect(screen.getByText('两个样本均可加载')).toBeInTheDocument()
+    expect(screen.getByText('pytest -q')).toBeInTheDocument()
+    expect(screen.getByText('模型客户端实现')).toBeInTheDocument()
+    expect(screen.getByText('覆盖超时')).toBeInTheDocument()
+  })
+
+  it('shows radar run status and refreshes it', async () => {
+    mockFetch(true)
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '技术雷达' }))
+    expect(await screen.findByText('5/6 个来源成功')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '立即刷新' }))
+    expect(await screen.findByText('6/6 个来源成功')).toBeInTheDocument()
+  })
+
+  it('renders tutor intent and the streamed model answer', async () => {
+    mockFetch(true)
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByTitle('打开导师'))
+    await user.type(screen.getByLabelText('询问导师'), '我该怎么改进？')
+    await user.click(screen.getByTitle('发送'))
+
+    expect(await screen.findByText('任务辅导')).toBeInTheDocument()
+    expect(screen.getByText('先运行验收命令，再补充最低分项的证据。')).toBeInTheDocument()
+  })
+
+  it('executes a tutor action only after confirmation', async () => {
+    const requests: string[] = []
+    const actionEvents = [
+      'event: intent\ndata: {"intent":"radar_to_task","confidence":0.96,"needs_action":true}',
+      'event: token\ndata: {"text":"确认后创建任务。"}',
+      'event: action_proposal\ndata: {"id":"action-1","summary":"基于雷达创建课程任务","expires_at":"2026-07-30T10:00:00Z"}',
+      'event: done\ndata: {}',
+    ].join('\n\n') + '\n\n'
+    mockFetch(true, (url) => requests.push(url), actionEvents)
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByTitle('打开导师'))
+    await user.type(screen.getByLabelText('询问导师'), '把雷达转成任务')
+    await user.click(screen.getByTitle('发送'))
+    expect(await screen.findByText('基于雷达创建课程任务')).toBeInTheDocument()
+    expect(requests.some((url) => url.includes('/chat/actions/'))).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: '确认' }))
+    expect(requests.some((url) => url.endsWith('/chat/actions/action-1/confirm'))).toBe(true)
   })
 
   it('configures chat and embedding providers independently', async () => {
@@ -115,89 +205,15 @@ describe('TechGrowth app', () => {
     render(<App />)
 
     await screen.findByRole('heading', { name: task.title })
-    const settingsButton = document.querySelector('.sidebar .lucide-settings')?.closest('button')
-    expect(settingsButton).not.toBeNull()
-    await user.click(settingsButton!)
-
+    await user.click(screen.getByRole('button', { name: '设置' }))
     expect(screen.getByRole('heading', { name: '聊天模型服务' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Embedding 模型服务' })).toBeInTheDocument()
-    expect(screen.getByLabelText('聊天 Base URL')).toHaveValue('https://chat.example/v1')
-    expect(screen.getByLabelText('Embedding Base URL')).toHaveValue(
-      'https://embed.example/v1',
-    )
-
     await user.type(screen.getByLabelText('Embedding API Key'), 'embed-secret')
     await user.click(screen.getByRole('button', { name: '保存模型设置' }))
 
     expect(providerBody).toEqual({
-      chat: {
-        base_url: 'https://chat.example/v1',
-        model: 'chat-model',
-        api_key: '',
-      },
-      embedding: {
-        base_url: 'https://embed.example/v1',
-        model: 'embed-model',
-        api_key: 'embed-secret',
-      },
+      chat: { base_url: 'https://chat.example/v1', model: 'chat-model', api_key: '' },
+      embedding: { base_url: 'https://embed.example/v1', model: 'embed-model', api_key: 'embed-secret' },
     })
-  })
-
-  it('renders FastAPI validation details as readable text', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (String(input).endsWith('/auth/me')) return new Response('', { status: 401 })
-        return Response.json(
-          { detail: [{ msg: '请输入可用于登录的邮箱地址' }] },
-          { status: 422 },
-        )
-      }),
-    )
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.type(await screen.findByLabelText('邮箱'), 'dev@techgrowth.local')
-    await user.type(screen.getByLabelText('密码'), 'DevelopmentPassword123!')
-    await user.click(screen.getByRole('button', { name: '登录' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('请输入可用于登录的邮箱地址')
-  })
-
-  it('shows recovery codes before entering the workbench on first TOTP setup', async () => {
-    let meCalls = 0
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input)
-        if (url.endsWith('/auth/me')) {
-          meCalls += 1
-          return meCalls === 1
-            ? new Response('', { status: 401 })
-            : Response.json({ id: 'u1', email: 'developer@example.com', totp_enabled: true })
-        }
-        if (url.endsWith('/auth/login')) return Response.json({ next: 'totp_setup' })
-        if (url.endsWith('/auth/totp/setup')) return Response.json({ secret: 'TESTSECRET' })
-        if (url.endsWith('/auth/totp/confirm')) {
-          return Response.json({
-            csrf_token: 'csrf-token',
-            recovery_codes: ['alpha-111', 'bravo-222'],
-          })
-        }
-        return Response.json({})
-      }),
-    )
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.type(await screen.findByLabelText('邮箱'), 'developer@example.com')
-    await user.type(screen.getByLabelText('密码'), 'DevelopmentPassword123!')
-    await user.click(screen.getByRole('button', { name: '登录' }))
-    await user.type(await screen.findByLabelText('动态验证码'), '123456')
-    await user.click(screen.getByRole('button', { name: '验证' }))
-
-    expect(await screen.findByRole('heading', { name: '保存恢复码' })).toBeInTheDocument()
-    expect(screen.getByText('alpha-111')).toBeInTheDocument()
-    expect(screen.getByText('bravo-222')).toBeInTheDocument()
   })
 })

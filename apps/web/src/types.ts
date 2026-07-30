@@ -1,9 +1,17 @@
 export type User = { id: string; email: string; totp_enabled: boolean }
 
+export type TaskStep = { action: string; minutes: number; expected_result: string }
+export type AcceptanceCheck = {
+  method: 'command' | 'inspection' | 'answer'
+  instruction: string
+  expected_result: string
+}
 export type RubricCriterion = {
   key: string
   label: string
+  description?: string
   critical: boolean
+  score_anchors?: Record<string, string>
 }
 
 export type LearningTask = {
@@ -13,10 +21,18 @@ export type LearningTask = {
   skill_name: string
   expected_minutes: number
   objective: string
-  instructions: string[]
+  curriculum_version: string
+  track_key: string
+  stage_key: string
+  node_key: string
+  prerequisites: string[]
+  instructions: Array<string | TaskStep>
   source_ids: string[]
   submission_kinds: string[]
+  deliverables: string[]
+  acceptance_checks: AcceptanceCheck[]
   rubric: RubricCriterion[]
+  remediation_hint: string
   status: string
   created_at: string
 }
@@ -33,6 +49,30 @@ export type RadarItem = {
   relevance_reason: string
   published_at: string
 }
+
+export type RadarStatus = {
+  id: string
+  status: 'never' | 'running' | 'succeeded' | 'partial' | 'failed'
+  successful_sources: number
+  failed_sources: string[]
+  inserted_items: number
+  embedding_failures: number
+  created_at: string | null
+}
+
+export type ChatIntent =
+  | 'technical_qa'
+  | 'task_coaching'
+  | 'submission_improvement'
+  | 'growth_planning'
+  | 'radar_to_task'
+
+export type ChatEvent =
+  | { type: 'intent'; intent: ChatIntent; confidence: number; needs_action: boolean }
+  | { type: 'token'; text: string }
+  | { type: 'action_proposal'; id: string; summary: string; expires_at: string }
+  | { type: 'error'; code: string; message: string }
+  | { type: 'done' }
 
 export type SkillProfile = {
   id: string
@@ -67,10 +107,7 @@ export type ProviderEndpointStatus = {
 }
 
 export type SetupStatus = {
-  provider: {
-    chat: ProviderEndpointStatus
-    embedding: ProviderEndpointStatus
-  }
+  provider: { chat: ProviderEndpointStatus; embedding: ProviderEndpointStatus }
   domain: string
   icp_number: string
   smtp_configured: boolean
