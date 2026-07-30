@@ -37,6 +37,47 @@ export type LearningTask = {
   created_at: string
 }
 
+export type AnalyticsMetric = {
+  key: string
+  label: string
+  value: number
+  unit: string
+  definition: string
+  components: Record<string, unknown>
+}
+
+export type TrackProgress = {
+  track_key: string
+  label: string
+  completed_nodes: number
+  total_nodes: number
+  current_stage: string
+}
+
+export type AnalyticsView = {
+  range: '7d' | '30d' | '90d' | 'all'
+  metrics: AnalyticsMetric[]
+  track_progress?: TrackProgress[]
+  topics?: Record<string, number>
+  repositories?: Repository[]
+}
+
+export type CurriculumTrack = {
+  key: string
+  label: string
+  kind: 'primary' | 'secondary'
+  completed_nodes: number
+  total_nodes: number
+  current_stage: string
+}
+
+export type CurriculumState = {
+  active_track_key: string
+  algorithm_days_per_week: number
+  catalog_version: string
+  tracks: CurriculumTrack[]
+}
+
 export type RadarItem = {
   id: string
   title: string

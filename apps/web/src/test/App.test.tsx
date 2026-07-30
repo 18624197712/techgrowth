@@ -109,6 +109,39 @@ function mockFetch(
           icp_number: '',
         })
       if (url.endsWith('/notifications/preferences')) return Response.json([])
+      if (url.includes('/analytics/'))
+        return Response.json({
+          range: '30d',
+          metrics: [
+            {
+              key: 'learning_minutes', label: '有效学习', value: 164, unit: '分钟',
+              definition: '通过审阅任务的计划分钟数', components: { passed_tasks: 4 },
+            },
+            {
+              key: 'task_pass_rate', label: '任务通过率', value: 80, unit: '%',
+              definition: '通过审阅数除以全部已审任务数', components: { passed: 4, reviewed: 5 },
+            },
+          ],
+          track_progress: [
+            { track_key: 'java', label: 'Java + Spring Cloud', completed_nodes: 5, total_nodes: 12, current_stage: 'practice' },
+          ],
+        })
+      if (url.endsWith('/curriculum'))
+        return Response.json({
+          active_track_key: 'java', algorithm_days_per_week: 2, catalog_version: 'v2',
+          tracks: [
+            { key: 'java', label: 'Java + Spring Cloud', kind: 'primary', completed_nodes: 5, total_nodes: 12, current_stage: 'practice' },
+            { key: 'go', label: 'Go', kind: 'primary', completed_nodes: 0, total_nodes: 12, current_stage: 'foundation' },
+            { key: 'algorithms', label: '数据结构与算法', kind: 'secondary', completed_nodes: 2, total_nodes: 24, current_stage: 'foundation' },
+          ],
+        })
+      if (url.endsWith('/curriculum/active-track') || url.endsWith('/curriculum/algorithm-frequency'))
+        return Response.json({
+          active_track_key: url.endsWith('/active-track') ? 'go' : 'java',
+          algorithm_days_per_week: 3,
+          catalog_version: 'v2',
+          tracks: [],
+        })
       if (url.endsWith('/chat/stream'))
         return new Response(tutorBody, { headers: { 'Content-Type': 'text/event-stream' } })
       if (url.includes('/chat/actions/') && url.endsWith('/confirm')) return Response.json(task)
@@ -215,5 +248,35 @@ describe('TechGrowth app', () => {
       chat: { base_url: 'https://chat.example/v1', model: 'chat-model', api_key: '' },
       embedding: { base_url: 'https://embed.example/v1', model: 'embed-model', api_key: 'embed-secret' },
     })
+  })
+
+  it('opens the unified data platform with explainable metrics', async () => {
+    mockFetch(true)
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '数据中台' }))
+
+    expect(await screen.findByRole('heading', { name: '成长数据总览' })).toBeInTheDocument()
+    expect(screen.getByText('164')).toBeInTheDocument()
+    expect(screen.getByText('通过审阅任务的计划分钟数')).toBeInTheDocument()
+    expect(screen.getByText('Java + Spring Cloud')).toBeInTheDocument()
+  })
+
+  it('switches the selected primary curriculum without clearing progress', async () => {
+    let switchBody: unknown
+    mockFetch(true, (url, init) => {
+      if (url.endsWith('/curriculum/active-track')) switchBody = JSON.parse(String(init?.body))
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '课程中心' }))
+    await screen.findByRole('heading', { name: '选择成长路线' })
+    await user.click(screen.getByRole('button', { name: '将 Go 设为主路线' }))
+
+    expect(switchBody).toEqual({ track_key: 'go' })
   })
 })

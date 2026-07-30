@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings, get_settings
 from .db import Database
-from .routers import auth, connector, growth, system
+from .routers import analytics, auth, connector, growth, system
 from .routers import settings as settings_router
 from .services.container import ServiceContainer
 
@@ -54,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(connector.router, prefix="/api/v1")
     app.include_router(system.router, prefix="/api/v1")
     app.include_router(settings_router.router, prefix="/api/v1")
+    app.include_router(analytics.router, prefix="/api/v1")
 
     @app.get("/api/v1/health", tags=["system"])
     def health() -> dict[str, str]:

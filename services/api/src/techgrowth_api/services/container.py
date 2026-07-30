@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from ..config import Settings
 from ..db import Database
+from .analytics import AnalyticsService
 from .artifacts import TempArtifactStore
 from .auth import AuthService
 from .chat_actions import ChatActionService
@@ -32,12 +33,14 @@ class ServiceContainer:
     chat_context: ChatContextService
     chat_actions: ChatActionService
     curriculum: CurriculumService
+    analytics: AnalyticsService
 
     @classmethod
     def build(cls, database: Database, settings: Settings) -> "ServiceContainer":
         factory = database.session_factory
         auth = AuthService(factory, settings)
         curriculum = CurriculumService(factory)
+        analytics = AnalyticsService(factory, curriculum)
         growth = GrowthService(factory, curriculum)
         radar = RadarService(factory)
         provider_settings = SettingsService(factory, auth.cipher)
@@ -60,4 +63,5 @@ class ServiceContainer:
             chat_context=chat_context,
             chat_actions=chat_actions,
             curriculum=curriculum,
+            analytics=analytics,
         )

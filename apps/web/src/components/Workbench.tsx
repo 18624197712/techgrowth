@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import {
-  Bell, Bot, CheckCircle2, ChevronRight, CircleGauge, Code2, ExternalLink,
+  BarChart3, Bell, Bot, CheckCircle2, ChevronRight, CircleGauge, Code2, ExternalLink,
   FileCheck2, GitBranch, History, LoaderCircle, LogOut, Menu, Radar, RefreshCw,
-  Save, Settings, ShieldCheck, Sparkles, Target, XCircle,
+  Route, Save, Settings, ShieldCheck, Sparkles, Target, XCircle,
 } from 'lucide-react'
 
 import { ApiError, api } from '../api'
@@ -12,10 +12,14 @@ import type {
   SetupStatus, SkillProfile, User, WeeklyReview,
 } from '../types'
 import { ChatDrawer } from './ChatDrawer'
+import { CurriculumCenter } from './CurriculumCenter'
+import { DataPlatform } from './DataPlatform'
 
-type View = 'today' | 'radar' | 'repositories' | 'growth' | 'weekly' | 'settings'
+type View = 'today' | 'analytics' | 'curriculum' | 'radar' | 'repositories' | 'growth' | 'weekly' | 'settings'
 const navItems: { id: View; label: string; icon: typeof Target }[] = [
   { id: 'today', label: '今日任务', icon: Target },
+  { id: 'analytics', label: '数据中台', icon: BarChart3 },
+  { id: 'curriculum', label: '课程中心', icon: Route },
   { id: 'radar', label: '技术雷达', icon: Radar },
   { id: 'repositories', label: '项目与仓库', icon: GitBranch },
   { id: 'growth', label: '成长证据', icon: CircleGauge },
@@ -79,6 +83,8 @@ export function Workbench({ user, onLogout }: { user: User; onLogout: () => void
     if (loading) return <div className="loading-state"><LoaderCircle className="spin" /><span>正在载入</span></div>
     if (error) return <div className="error-state"><XCircle /><p>{error}</p><button onClick={() => void load()}><RefreshCw size={16} />重试</button></div>
     if (view === 'today') return <TodayView task={task} radar={radar} onTask={setTask} onProfile={setProfile} />
+    if (view === 'analytics') return <DataPlatform />
+    if (view === 'curriculum') return <CurriculumCenter />
     if (view === 'radar') return <RadarView items={radar} selected={selectedRadar} onSelect={setSelectedRadar} onReload={load} />
     if (view === 'repositories') return <RepositoryView items={repositories} />
     if (view === 'growth') return <GrowthView skills={profile} />
