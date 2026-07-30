@@ -5,12 +5,88 @@ import pytest
 from pydantic import BaseModel
 
 from techgrowth_api.config import Settings
-from techgrowth_api.integrations.model_client import ModelClient, TokenBudgetExceeded
+from techgrowth_api.integrations.model_client import (
+    ModelClient,
+    ModelClientError,
+    TokenBudgetExceeded,
+)
 
 
 class Answer(BaseModel):
     title: str
     source_ids: list[str]
+
+
+@pytest.mark.asyncio
+async def test_chat_and_embedding_requests_use_independent_providers() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"title":"Task","source_ids":["s1"]}'
+                            }
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"data": [{"embedding": [0.1, 0.2]}], "usage": {"total_tokens": 1}},
+        )
+
+    settings = Settings(
+        chat_base_url="https://chat.example/v1",
+        chat_api_key="chat-secret",
+        chat_model="chat-model",
+        embedding_base_url="https://embed.example/v1",
+        embedding_api_key="embed-secret",
+        embedding_model="embed-model",
+    )
+    client = ModelClient(settings, transport=httpx.MockTransport(handler))
+
+    await client.structured("system", "user", Answer)
+    await client.embedding("text")
+
+    assert str(requests[0].url) == "https://chat.example/v1/chat/completions"
+    assert requests[0].headers["authorization"] == "Bearer chat-secret"
+    assert str(requests[1].url) == "https://embed.example/v1/embeddings"
+    assert requests[1].headers["authorization"] == "Bearer embed-secret"
+
+
+@pytest.mark.asyncio
+async def test_missing_chat_configuration_only_blocks_chat() -> None:
+    settings = Settings(
+        embedding_base_url="https://embed.example/v1",
+        embedding_api_key="embed-secret",
+        embedding_model="embed-model",
+    )
+    client = ModelClient(settings)
+
+    assert client.embedding_configured is True
+    with pytest.raises(ModelClientError, match="Chat model provider"):
+        await client.structured("system", "user", Answer)
+
+
+@pytest.mark.asyncio
+async def test_missing_embedding_configuration_only_blocks_embedding() -> None:
+    settings = Settings(
+        chat_base_url="https://chat.example/v1",
+        chat_api_key="chat-secret",
+        chat_model="chat-model",
+    )
+    client = ModelClient(settings)
+
+    assert client.configured is True
+    with pytest.raises(ModelClientError, match="Embedding model provider"):
+        await client.embedding("text")
 
 
 @pytest.mark.asyncio

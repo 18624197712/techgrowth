@@ -120,10 +120,10 @@ async def run_evaluation(settings: Settings) -> dict:
 
 def main() -> int:
     settings = get_settings()
-    if not settings.openai_base_url or not settings.openai_api_key or not settings.chat_model:
+    if not ModelClient(settings).configured:
         print(
-            "Real-model evaluation requires TG_OPENAI_BASE_URL, "
-            "TG_OPENAI_API_KEY and TG_CHAT_MODEL"
+            "Real-model evaluation requires chat Base URL, API key, and model "
+            "through TG_CHAT_* or legacy TG_OPENAI_* settings"
         )
         return 2
     report = asyncio.run(run_evaluation(settings))

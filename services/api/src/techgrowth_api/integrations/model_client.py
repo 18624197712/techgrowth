@@ -28,21 +28,31 @@ class ModelClient:
     @property
     def configured(self) -> bool:
         return bool(
-            self.settings.openai_base_url
-            and self.settings.openai_api_key
+            (self.settings.chat_base_url or self.settings.openai_base_url)
+            and (self.settings.chat_api_key or self.settings.openai_api_key)
             and self.settings.chat_model
+        )
+
+    @property
+    def embedding_configured(self) -> bool:
+        return bool(
+            (self.settings.embedding_base_url or self.settings.openai_base_url)
+            and (self.settings.embedding_api_key or self.settings.openai_api_key)
+            and self.settings.embedding_model
         )
 
     async def structured(
         self, system_prompt: str, user_prompt: str, output_model: type[ModelT]
     ) -> ModelT:
         if not self.configured:
-            raise ModelClientError("Model provider is not configured")
+            raise ModelClientError("Chat model provider is not configured")
+        base_url = self.settings.chat_base_url or self.settings.openai_base_url
+        api_key = self.settings.chat_api_key or self.settings.openai_api_key
         total_tokens = 0
         last_error: Exception | None = None
         async with httpx.AsyncClient(
-            base_url=self.settings.openai_base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {self.settings.openai_api_key}"},
+            base_url=base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {api_key}"},
             timeout=60,
             transport=self.transport,
         ) as client:
@@ -95,11 +105,13 @@ class ModelClient:
         raise ModelClientError("Model did not return valid structured output") from last_error
 
     async def embedding(self, text: str) -> list[float]:
-        if not self.settings.embedding_model:
-            raise ModelClientError("Embedding model is not configured")
+        if not self.embedding_configured:
+            raise ModelClientError("Embedding model provider is not configured")
+        base_url = self.settings.embedding_base_url or self.settings.openai_base_url
+        api_key = self.settings.embedding_api_key or self.settings.openai_api_key
         async with httpx.AsyncClient(
-            base_url=self.settings.openai_base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {self.settings.openai_api_key}"},
+            base_url=base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {api_key}"},
             timeout=60,
             transport=self.transport,
         ) as client:
