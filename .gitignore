@@ -24,6 +24,7 @@ Thumbs.db
 data/
 backups/
 .superpowers/
+.worktrees/
 apps/connector/build/
 apps/connector/release/
 apps/web/vite.config.js
