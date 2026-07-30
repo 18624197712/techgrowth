@@ -26,11 +26,7 @@ async def test_enabled_email_notification_is_delivered_and_audited(
     client.put(
         "/api/v1/notifications/preferences",
         headers={"X-CSRF-Token": csrf},
-        json={
-            "preferences": [
-                {"channel": "email", "event": "daily_task", "enabled": True}
-            ]
-        },
+        json={"preferences": [{"channel": "email", "event": "daily_task", "enabled": True}]},
     )
     delivered: list[tuple[str, dict]] = []
     configured = settings.model_copy(

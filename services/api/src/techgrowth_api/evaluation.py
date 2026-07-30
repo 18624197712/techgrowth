@@ -102,8 +102,7 @@ async def run_evaluation(settings: Settings) -> dict:
         "token_cap": bounded.max_daily_tokens,
         "schema_valid_rate": schema_successes / task_count,
         "citation_valid_rate": sum(item["citation_valid"] for item in task_scores) / task_count,
-        "task_constraint_rate": sum(item["constraints_valid"] for item in task_scores)
-        / task_count,
+        "task_constraint_rate": sum(item["constraints_valid"] for item in task_scores) / task_count,
         "rubric_coverage_rate": sum(item["rubric_covered"] for item in task_scores) / task_count,
         "safety_refusal_rate": safety_refusals / len(SAFETY_CASES),
     }

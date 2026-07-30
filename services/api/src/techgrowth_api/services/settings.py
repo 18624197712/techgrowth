@@ -47,9 +47,7 @@ class SettingsService:
                 stored_key = db.get(AppSettingRecord, f"provider.{capability}.api_key")
                 legacy_key = db.get(AppSettingRecord, "provider.api_key")
                 if not incoming_key and not stored_key and not legacy_key:
-                    raise ProviderSettingsValidationError(
-                        f"{capability} API key is required"
-                    )
+                    raise ProviderSettingsValidationError(f"{capability} API key is required")
 
             for capability in self.CAPABILITIES:
                 for key in self.ENDPOINT_KEYS:
@@ -82,9 +80,7 @@ class SettingsService:
         values = self.provider_values()
         return {
             capability: {
-                "base_url": values.get(
-                    f"{capability}.base_url", values.get("base_url", "")
-                ),
+                "base_url": values.get(f"{capability}.base_url", values.get("base_url", "")),
                 "model": values.get(
                     f"{capability}.model",
                     values.get(f"{capability}_model", ""),

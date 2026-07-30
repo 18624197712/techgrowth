@@ -66,9 +66,7 @@ def complete_job(
     device: ConnectorDeviceRecord = Depends(connector_device),
 ) -> dict:
     try:
-        job = request.app.state.services.connector.complete_job(
-            device.id, job_id, payload.result
-        )
+        job = request.app.state.services.connector.complete_job(device.id, job_id, payload.result)
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"ok": True, "job_id": job.id, "status": job.status}
