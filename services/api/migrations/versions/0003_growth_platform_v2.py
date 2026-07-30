@@ -41,24 +41,25 @@ def upgrade() -> None:
             "learning_tasks", sa.Column("solution_revealed_at", sa.DateTime(timezone=True))
         )
     if "replaces_task_id" not in task_columns:
-        op.add_column(
-            "learning_tasks",
-            sa.Column(
-                "replaces_task_id",
-                sa.String(36),
-                sa.ForeignKey("learning_tasks.id", ondelete="SET NULL"),
-            ),
-        )
-        op.create_index(
-            "ix_learning_tasks_replaces_task_id", "learning_tasks", ["replaces_task_id"]
-        )
+        with op.batch_alter_table("learning_tasks") as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "replaces_task_id",
+                    sa.String(36),
+                    sa.ForeignKey(
+                        "learning_tasks.id",
+                        name="fk_learning_tasks_replaces_task_id",
+                        ondelete="SET NULL",
+                    ),
+                )
+            )
+            batch_op.create_index("ix_learning_tasks_replaces_task_id", ["replaces_task_id"])
     if "regeneration_key" not in task_columns:
-        op.add_column(
-            "learning_tasks", sa.Column("regeneration_key", sa.String(120), nullable=True)
-        )
-        op.create_unique_constraint(
-            "uq_learning_tasks_regeneration_key", "learning_tasks", ["regeneration_key"]
-        )
+        with op.batch_alter_table("learning_tasks") as batch_op:
+            batch_op.add_column(sa.Column("regeneration_key", sa.String(120), nullable=True))
+            batch_op.create_unique_constraint(
+                "uq_learning_tasks_regeneration_key", ["regeneration_key"]
+            )
     if "curriculum_state" not in sa.inspect(op.get_bind()).get_table_names():
         op.create_table(
             "curriculum_state",
@@ -110,21 +111,23 @@ def downgrade() -> None:
         column["name"] for column in sa.inspect(op.get_bind()).get_columns("learning_tasks")
     }
     if "regeneration_key" in task_columns:
-        op.drop_constraint("uq_learning_tasks_regeneration_key", "learning_tasks", type_="unique")
-    for name in (
-        "regeneration_key",
-        "regeneration_reason",
-        "replaces_task_id",
-        "solution_revealed_at",
-        "solution_outline",
-        "revealed_hint_level",
-        "hints",
-        "starter_context",
-        "constraints",
-        "problem_statement",
-        "theory_brief",
-        "learning_objectives",
-        "task_kind",
-    ):
-        if name in task_columns:
-            op.drop_column("learning_tasks", name)
+        with op.batch_alter_table("learning_tasks") as batch_op:
+            batch_op.drop_constraint("uq_learning_tasks_regeneration_key", type_="unique")
+    with op.batch_alter_table("learning_tasks") as batch_op:
+        for name in (
+            "regeneration_key",
+            "regeneration_reason",
+            "replaces_task_id",
+            "solution_revealed_at",
+            "solution_outline",
+            "revealed_hint_level",
+            "hints",
+            "starter_context",
+            "constraints",
+            "problem_statement",
+            "theory_brief",
+            "learning_objectives",
+            "task_kind",
+        ):
+            if name in task_columns:
+                batch_op.drop_column(name)
