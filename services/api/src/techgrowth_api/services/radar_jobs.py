@@ -20,6 +20,7 @@ class RadarJobService:
             proxy_url=settings.outbound_proxy_url,
             attempts_per_url=settings.radar_attempts_per_url,
             timeout_seconds=settings.radar_request_timeout_seconds,
+            max_items_per_source=settings.radar_max_items_per_source,
         )
         self.lock = asyncio.Lock()
 
@@ -96,11 +97,16 @@ class RadarJobService:
             successful = [result for result in results if not result.error]
             failed = [result for result in results if result.error]
             candidates = [candidate for result in successful for candidate in result.candidates]
+            source_keys = [candidate.source_key for candidate in candidates]
+            existing_keys = self.radar.existing_source_keys(source_keys)
+            new_candidates = [
+                candidate for candidate in candidates if candidate.source_key not in existing_keys
+            ]
             embeddings: dict[str, list[float]] = {}
             embedding_failures = 0
             model = ModelClient(provider)
             if model.embedding_configured:
-                for candidate in candidates:
+                for candidate in new_candidates:
                     try:
                         vector = await model.embedding(f"{candidate.title}\n{candidate.summary}")
                         if len(vector) != 1536:
@@ -109,10 +115,8 @@ class RadarJobService:
                     except ModelClientError:
                         embedding_failures += 1
 
-            inserted = self.radar.upsert(candidates, embeddings)
-            references = self.radar.ids_for_source_keys(
-                [candidate.source_key for candidate in candidates]
-            )
+            inserted = self.radar.upsert(new_candidates, embeddings)
+            references = self.radar.ids_for_source_keys(source_keys)
             status = "failed" if not successful else "partial" if failed else "succeeded"
             details = {
                 "successful_sources": len(successful),

@@ -61,7 +61,10 @@ DEFAULT_FEEDS = (
         "hacker-news-ai",
         "Hacker News",
         "AI engineering community",
-        ("https://hnrss.org/newest?q=AI%20agent",),
+        (
+            "https://hnrss.org/newest?q=AI%20agent",
+            "https://news.ycombinator.com/rss",
+        ),
         0.7,
     ),
     RadarFeed(
@@ -97,12 +100,14 @@ class RadarCollector:
         proxy_url: str = "",
         attempts_per_url: int = 2,
         timeout_seconds: float = 30,
+        max_items_per_source: int = 10,
     ) -> None:
         self.transport = transport
         self.feeds = feeds
         self.proxy_url = proxy_url
         self.attempts_per_url = max(1, attempts_per_url)
         self.timeout_seconds = timeout_seconds
+        self.max_items_per_source = max(1, max_items_per_source)
 
     async def collect(self) -> list[RadarSourceResult]:
         client_options = {
@@ -142,4 +147,7 @@ class RadarCollector:
         response = await client.get(url, headers={"User-Agent": "TechGrowth/0.1"})
         response.raise_for_status()
         items = FeedSource(feed.source_id, feed.source_name, feed.topic).parse(response.content)
-        return [replace(item, credibility=feed.credibility) for item in items]
+        return [
+            replace(item, credibility=feed.credibility)
+            for item in items[: self.max_items_per_source]
+        ]

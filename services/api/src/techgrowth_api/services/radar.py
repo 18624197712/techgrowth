@@ -69,6 +69,18 @@ class RadarService:
                 ).all()
             )
 
+    def existing_source_keys(self, source_keys: list[str]) -> set[str]:
+        if not source_keys:
+            return set()
+        with self.session_factory() as db:
+            return set(
+                db.scalars(
+                    select(RadarItemRecord.source_key).where(
+                        RadarItemRecord.source_key.in_(source_keys)
+                    )
+                ).all()
+            )
+
     def get(self, item_id: str) -> RadarItemRecord | None:
         with self.session_factory() as db:
             item = db.get(RadarItemRecord, item_id)

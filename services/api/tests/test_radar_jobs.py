@@ -4,6 +4,7 @@ import pytest
 
 from techgrowth_api.integrations.radar_collector import RadarSourceResult
 from techgrowth_api.integrations.radar_sources import IngestCandidate
+from techgrowth_api.services import radar_jobs as radar_jobs_module
 
 
 def candidate(source_key: str = "official:item-1") -> IngestCandidate:
@@ -60,6 +61,32 @@ async def test_automatic_radar_job_is_idempotent_for_the_day(client) -> None:
 
     assert first["id"] == second["id"]
     assert collector.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_radar_job_only_embeds_new_source_items(client, monkeypatch) -> None:
+    existing = candidate("official:existing")
+    new = candidate("official:new")
+    client.app.state.services.radar.upsert([existing])
+    embedded: list[str] = []
+
+    class FakeEmbeddingModel:
+        def __init__(self, settings) -> None:
+            self.embedding_configured = True
+
+        async def embedding(self, text: str) -> list[float]:
+            embedded.append(text)
+            return [0.1] * 1536
+
+    monkeypatch.setattr(radar_jobs_module, "ModelClient", FakeEmbeddingModel)
+    job = client.app.state.services.radar_jobs
+    job.collector = FakeCollector([RadarSourceResult("official", [existing, new], "")])
+
+    result = await job.run(force=True)
+
+    assert result["inserted_items"] == 1
+    assert len(embedded) == 1
+    assert new.title in embedded[0]
 
 
 def test_authenticated_manual_radar_refresh_returns_run_status(authenticated_client) -> None:

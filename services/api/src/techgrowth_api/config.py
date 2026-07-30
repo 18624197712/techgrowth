@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     outbound_proxy_url: str = ""
     radar_request_timeout_seconds: float = 30
     radar_attempts_per_url: int = 2
+    radar_max_items_per_source: int = 10
     github_token: str = ""
     smtp_host: str = ""
     smtp_port: int = 587

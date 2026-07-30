@@ -77,3 +77,37 @@ def test_radar_collector_keeps_optional_proxy_configuration() -> None:
     collector = RadarCollector(proxy_url="http://proxy.internal:8080")
 
     assert collector.proxy_url == "http://proxy.internal:8080"
+
+
+@pytest.mark.asyncio
+async def test_radar_collector_caps_items_per_source() -> None:
+    repeated = RSS.replace(
+        "</channel>",
+        """
+        <item><guid>release-2</guid><title>Agent Runtime 2.1</title>
+          <link>https://example.com/release-2</link><description>Second.</description>
+        </item>
+        </channel>
+        """,
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=repeated)
+
+    collector = RadarCollector(
+        transport=httpx.MockTransport(handler),
+        feeds=(
+            RadarFeed(
+                "bounded",
+                "Bounded Source",
+                "Agent engineering",
+                ("https://example.com/feed",),
+                0.9,
+            ),
+        ),
+        max_items_per_source=1,
+    )
+
+    results = await collector.collect()
+
+    assert len(results[0].candidates) == 1
