@@ -16,7 +16,11 @@ class RadarJobService:
         self.settings = settings
         self.radar = radar
         self.provider_settings = provider_settings
-        self.collector = RadarCollector()
+        self.collector = RadarCollector(
+            proxy_url=settings.outbound_proxy_url,
+            attempts_per_url=settings.radar_attempts_per_url,
+            timeout_seconds=settings.radar_request_timeout_seconds,
+        )
         self.lock = asyncio.Lock()
 
     def _latest_success_today(self) -> AgentRunRecord | None:

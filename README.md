@@ -18,6 +18,9 @@ Chat and Embedding providers can use different OpenAI-compatible endpoints and
 API keys. Configure them from the authenticated settings page or with the
 `TG_CHAT_*` and `TG_EMBEDDING_*` environment variables. Both Base URLs must
 include `/v1`; the older `TG_OPENAI_*` variables remain shared fallbacks only.
+Radar collection retries each source and uses configured fallback feeds. Set
+`TG_OUTBOUND_PROXY_URL` only when the ECS requires a compliant outbound HTTP(S)
+proxy; the proxy is used for radar requests and never for model credentials.
 
 ## Development
 

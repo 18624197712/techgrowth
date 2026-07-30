@@ -15,7 +15,7 @@ ChatIntent = Literal[
 
 class ChatIntentDecision(BaseModel):
     intent: ChatIntent
-    confidence: float = Field(ge=0, le=1)
+    confidence: float = Field(default=0.6, ge=0, le=1)
     needs_action: bool = False
 
 
@@ -56,7 +56,13 @@ class ChatWorkflowService:
 
     async def _classify_intent(self, state: ChatState) -> dict:
         decision = await self.model.structured(
-            "Classify the user's programming-growth request into exactly one supported intent. "
+            "Classify the user's programming-growth request into exactly one supported intent: "
+            "technical_qa for technical questions, task_coaching for help completing today's task, "
+            "submission_improvement for improving submitted work, growth_planning for choosing "
+            "the next learning goal, or radar_to_task only when the user explicitly asks to "
+            "convert the "
+            "currently selected radar item into a task. Return intent, confidence, and "
+            "needs_action. "
             "Only radar_to_task may request a write action.",
             state["message"][:8000],
             ChatIntentDecision,

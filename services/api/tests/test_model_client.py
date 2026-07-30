@@ -4,6 +4,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
+from techgrowth_api.chat_workflow import ChatIntentDecision
 from techgrowth_api.config import Settings
 from techgrowth_api.integrations.model_client import (
     ModelClient,
@@ -189,6 +190,116 @@ async def test_structured_output_retries_invalid_json() -> None:
 
     assert result.title == "Task"
     assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_structured_output_accepts_schema_defaults_and_requests_strict_json() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"intent":"growth_planning"}'}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+            },
+        )
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="secret",
+            chat_model="agent-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await client.structured("system", "user", ChatIntentDecision)
+
+    assert result.intent == "growth_planning"
+    assert result.confidence == 0.6
+    request_body = json.loads(requests[0].content)
+    assert request_body["response_format"]["json_schema"]["strict"] is True
+
+
+@pytest.mark.asyncio
+async def test_structured_output_accepts_parsed_and_fenced_json() -> None:
+    responses = iter(
+        [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "parsed": {"title": "Parsed", "source_ids": ["s1"]},
+                        }
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '```json\n{"title":"Fenced","source_ids":["s2"]}\n```'
+                        }
+                    }
+                ]
+            },
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=next(responses))
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="secret",
+            chat_model="agent-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    parsed = await client.structured("system", "user", Answer)
+    fenced = await client.structured("system", "user", Answer)
+
+    assert parsed.title == "Parsed"
+    assert fenced.title == "Fenced"
+
+
+@pytest.mark.asyncio
+async def test_structured_output_falls_back_when_json_schema_is_unsupported() -> None:
+    request_bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        request_bodies.append(body)
+        if "response_format" in body:
+            return httpx.Response(400, json={"error": {"message": "unsupported format"}})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": '{"title":"Fallback","source_ids":["s1"]}'}}
+                ]
+            },
+        )
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="secret",
+            chat_model="agent-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await client.structured("system", "user", Answer)
+
+    assert result.title == "Fallback"
+    assert "response_format" in request_bodies[0]
+    assert "response_format" not in request_bodies[1]
 
 
 @pytest.mark.asyncio
