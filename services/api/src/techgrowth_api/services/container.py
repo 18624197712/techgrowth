@@ -44,12 +44,13 @@ class ServiceContainer:
         daily_tasks = DailyTaskService(settings, growth, radar, provider_settings)
         radar_jobs = RadarJobService(factory, settings, radar, provider_settings)
         chat_context = ChatContextService(factory)
-        chat_actions = ChatActionService(factory, daily_tasks, growth, radar)
+        connector = ConnectorService(factory)
+        chat_actions = ChatActionService(factory, daily_tasks, growth, radar, curriculum, connector)
         return cls(
             auth=auth,
             growth=growth,
             radar=radar,
-            connector=ConnectorService(factory),
+            connector=connector,
             weekly=WeeklyService(factory),
             notifications=NotificationService(settings, factory, auth.cipher),
             settings=provider_settings,

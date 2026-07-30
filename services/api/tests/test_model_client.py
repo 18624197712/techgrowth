@@ -115,6 +115,65 @@ async def test_natural_completion_uses_chat_provider() -> None:
 
 
 @pytest.mark.asyncio
+async def test_native_function_calling_sends_tools_and_parses_arguments() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "switch_primary_track",
+                                        "arguments": '{"track_key":"go"}',
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3},
+            },
+        )
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="secret",
+            chat_model="agent-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "switch_primary_track",
+                "description": "切换路线",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
+
+    result = await client.complete_with_tools("system", "user", tools)
+
+    assert result.content is None
+    assert result.tool_calls[0].name == "switch_primary_track"
+    assert result.tool_calls[0].arguments == {"track_key": "go"}
+    body = json.loads(requests[0].content)
+    assert body["tools"] == tools
+    assert body["tool_choice"] == "auto"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("status_code", "error_code"),
     [(401, "provider_auth"), (403, "provider_auth"), (429, "provider_rate_limited")],
@@ -239,11 +298,7 @@ async def test_structured_output_accepts_parsed_and_fenced_json() -> None:
             },
             {
                 "choices": [
-                    {
-                        "message": {
-                            "content": '```json\n{"title":"Fenced","source_ids":["s2"]}\n```'
-                        }
-                    }
+                    {"message": {"content": '```json\n{"title":"Fenced","source_ids":["s2"]}\n```'}}
                 ]
             },
         ]
@@ -280,9 +335,7 @@ async def test_structured_output_falls_back_when_json_schema_is_unsupported() ->
         return httpx.Response(
             200,
             json={
-                "choices": [
-                    {"message": {"content": '{"title":"Fallback","source_ids":["s1"]}'}}
-                ]
+                "choices": [{"message": {"content": '{"title":"Fallback","source_ids":["s1"]}'}}]
             },
         )
 

@@ -5,6 +5,7 @@ from techgrowth_api.chat_workflow import (
     ChatWorkflowService,
 )
 from techgrowth_api.services.chat_context import ChatContextService
+from techgrowth_api.tools import ToolRegistry
 
 
 class FakeModel:
@@ -72,3 +73,36 @@ async def test_only_radar_intent_can_propose_a_write_action(client) -> None:
         "action_type": "create_task_from_radar",
         "radar_item_id": "radar-1",
     }
+
+
+class NativeToolModel(FakeModel):
+    def __init__(self):
+        super().__init__(ChatIntentDecision(intent="growth_planning", confidence=0.95))
+        self.round = 0
+
+    async def complete_with_tools(self, system_prompt, user_prompt, tools, messages=None):
+        from techgrowth_api.integrations.model_client import ModelToolCall, ToolCompletion
+
+        self.round += 1
+        if self.round == 1:
+            return ToolCompletion(
+                content=None,
+                tool_calls=[ModelToolCall("call-1", "get_active_curriculum", {})],
+            )
+        return ToolCompletion(content="你当前的主路线是 Java。", tool_calls=[])
+
+
+@pytest.mark.asyncio
+async def test_chat_workflow_executes_read_tools_before_answering(client) -> None:
+    workflow = ChatWorkflowService(
+        NativeToolModel(),
+        ChatContextService(client.app.state.database.session_factory),
+        ToolRegistry.from_services(client.app.state.services),
+        session_id="session-1",
+    )
+
+    result = await workflow.run("我现在学哪条路线？", {"view": "curriculum"})
+
+    assert result.answer == "你当前的主路线是 Java。"
+    assert [event["type"] for event in result.tool_events] == ["tool_call", "tool_result"]
+    assert result.tool_events[1]["result"]["active_track_key"] == "java"

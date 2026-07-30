@@ -22,6 +22,7 @@ from ..models import (
 )
 from ..schemas import ChatRequest, DeleteDataRequest, PushSubscriptionRequest
 from ..services.chat_actions import ChatActionError
+from ..tools import ToolRegistry
 from .growth import task_dict
 
 router = APIRouter(tags=["system"])
@@ -97,7 +98,10 @@ def chat_stream(
             )
             factory = getattr(request.app.state, "model_client_factory", ModelClient)
             workflow = ChatWorkflowService(
-                factory(settings), request.app.state.services.chat_context
+                factory(settings),
+                request.app.state.services.chat_context,
+                ToolRegistry.from_services(request.app.state.services),
+                session_id=session.id,
             )
             result = await workflow.run(payload.message, payload.page_context)
             yield sse_event(
@@ -108,6 +112,10 @@ def chat_stream(
                     "needs_action": result.needs_action,
                 },
             )
+            for event in result.tool_events:
+                yield sse_event(
+                    event["type"], {key: value for key, value in event.items() if key != "type"}
+                )
             for offset in range(0, len(result.answer), 24):
                 yield sse_event("token", {"text": result.answer[offset : offset + 24]})
             if result.action:
@@ -131,8 +139,8 @@ async def confirm_chat_action(
     session: AuthSession = Depends(csrf_session),
 ) -> dict:
     try:
-        task = await request.app.state.services.chat_actions.confirm(action_id, session.id)
-        return task_dict(task)
+        result = await request.app.state.services.chat_actions.confirm(action_id, session.id)
+        return task_dict(result) if isinstance(result, LearningTaskRecord) else result
     except ChatActionError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
 
