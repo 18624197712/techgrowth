@@ -141,6 +141,27 @@ async def test_natural_completion_normalizes_provider_errors(
 
 
 @pytest.mark.asyncio
+async def test_structured_completion_normalizes_provider_auth_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "secret provider detail"})
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="wrong-secret",
+            chat_model="chat-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ModelClientError) as error:
+        await client.structured("system", "user", Answer)
+
+    assert error.value.code == "provider_auth"
+    assert "secret provider detail" not in str(error.value)
+
+
+@pytest.mark.asyncio
 async def test_structured_output_retries_invalid_json() -> None:
     calls = 0
 

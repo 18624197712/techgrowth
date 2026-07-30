@@ -35,3 +35,20 @@ class DailyTaskService:
             recent_topics=self.growth.recent_topics(),
         )
         return self.growth.save_draft(draft, node.title)
+
+    async def generate_from_radar(self, radar_item_id: str):
+        if self.growth.today_task() is not None:
+            raise ValueError("今日任务已存在，请完成后再创建新的雷达任务")
+        item = self.radar.get(radar_item_id)
+        if item is None:
+            raise LookupError("Radar item not found")
+        node = self.growth.next_curriculum_node()
+        settings = resolve_provider_settings(
+            self.settings, self.provider_settings.provider_values()
+        )
+        draft = await AgentWorkflowService(settings).generate_daily_task(
+            node=node,
+            sources=[{"id": item.id, "content": f"{item.title}\n{item.summary}"}],
+            recent_topics=self.growth.recent_topics(),
+        )
+        return self.growth.save_draft(draft, node.title)

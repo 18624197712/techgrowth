@@ -107,6 +107,13 @@ class GrowthService:
             db.commit()
             return task
 
+    def get_task(self, task_id: str) -> LearningTaskRecord | None:
+        with self.session_factory() as db:
+            task = db.get(LearningTaskRecord, task_id)
+            if task:
+                db.expunge(task)
+            return task
+
     def submit(
         self, task_id: str, request: SubmissionRequest
     ) -> tuple[SubmissionRecord, ReviewRecord]:

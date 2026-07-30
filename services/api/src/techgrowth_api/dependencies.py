@@ -1,6 +1,6 @@
 from fastapi import Cookie, Header, HTTPException, Request
 
-from .models import User
+from .models import AuthSession, User
 from .services.auth import AuthError
 
 
@@ -19,6 +19,17 @@ def csrf_user(
 ) -> User:
     try:
         return request.app.state.services.auth.validate_csrf(tg_session, x_csrf_token)
+    except AuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+def csrf_session(
+    request: Request,
+    tg_session: str = Cookie(default=""),
+    x_csrf_token: str = Header(default=""),
+) -> AuthSession:
+    try:
+        return request.app.state.services.auth.validate_csrf_session(tg_session, x_csrf_token)
     except AuthError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 

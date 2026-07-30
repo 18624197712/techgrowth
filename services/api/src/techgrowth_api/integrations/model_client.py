@@ -27,6 +27,15 @@ class ModelClient:
         self.transport = transport
         self.tokens_used = 0
 
+    @staticmethod
+    def _check_response(response: httpx.Response) -> None:
+        if response.status_code in {401, 403}:
+            raise ModelClientError("模型服务鉴权失败", "provider_auth")
+        if response.status_code == 429:
+            raise ModelClientError("模型服务请求过于频繁", "provider_rate_limited")
+        if response.status_code >= 400:
+            raise ModelClientError("模型服务暂时不可用", "provider_unavailable")
+
     @property
     def configured(self) -> bool:
         return bool(
@@ -69,12 +78,7 @@ class ModelClient:
                 )
         except httpx.TimeoutException as exc:
             raise ModelClientError("模型服务响应超时", "provider_timeout") from exc
-        if response.status_code in {401, 403}:
-            raise ModelClientError("模型服务鉴权失败", "provider_auth")
-        if response.status_code == 429:
-            raise ModelClientError("模型服务请求过于频繁", "provider_rate_limited")
-        if response.status_code >= 400:
-            raise ModelClientError("模型服务暂时不可用", "provider_unavailable")
+        self._check_response(response)
         try:
             payload = response.json()
             content = payload["choices"][0]["message"]["content"]
@@ -131,7 +135,7 @@ class ModelClient:
                         },
                     },
                 )
-                response.raise_for_status()
+                self._check_response(response)
                 payload = response.json()
                 usage = payload.get("usage", {})
                 total_tokens += int(usage.get("prompt_tokens", 0)) + int(
@@ -167,7 +171,7 @@ class ModelClient:
             response = await client.post(
                 "/embeddings", json={"model": self.settings.embedding_model, "input": text}
             )
-            response.raise_for_status()
+            self._check_response(response)
             payload = response.json()
             self.tokens_used += int(payload.get("usage", {}).get("total_tokens", 0))
             if self.tokens_used > self.settings.max_daily_tokens:

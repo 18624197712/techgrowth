@@ -140,12 +140,18 @@ class AuthService:
             return session, session.user
 
     def validate_csrf(self, raw_token: str, csrf: str) -> User:
+        return self.validate_csrf_session(raw_token, csrf).user
+
+    def validate_csrf_session(self, raw_token: str, csrf: str) -> AuthSession:
         with self.session_factory() as db:
             session = self._session(db, raw_token, allowed_states={"authenticated"})
             if not constant_time_matches(csrf, session.csrf_hash):
                 raise AuthError("CSRF token invalid", 403)
-            db.expunge(session.user)
-            return session.user
+            user = session.user
+            db.expunge(user)
+            db.expunge(session)
+            session.user = user
+            return session
 
     def logout(self, raw_token: str) -> None:
         with self.session_factory() as db:

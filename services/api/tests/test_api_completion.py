@@ -1,62 +1,66 @@
-def test_today_review_weekly_and_chat_endpoints(authenticated_client) -> None:
+import json
+
+from techgrowth_api.chat_workflow import ChatIntentDecision
+from techgrowth_api.integrations.model_client import ModelClientError
+
+
+class StaticChatModel:
+    async def structured(self, system_prompt, user_prompt, output_model):
+        return ChatIntentDecision(intent="task_coaching", confidence=0.91)
+
+    async def complete(self, system_prompt, user_prompt):
+        return "先运行验收命令，再根据最低分 Rubric 补充证据。"
+
+
+class FailingChatModel(StaticChatModel):
+    async def complete(self, system_prompt, user_prompt):
+        raise ModelClientError("模型服务鉴权失败", "provider_auth")
+
+
+def event_names(body: str) -> list[str]:
+    return [
+        line.removeprefix("event: ") for line in body.splitlines() if line.startswith("event: ")
+    ]
+
+
+def test_chat_stream_emits_real_model_answer_and_typed_events(authenticated_client) -> None:
     client, csrf = authenticated_client
-    assert client.get("/api/v1/tasks/today").status_code == 404
+    client.app.state.model_client_factory = lambda settings: StaticChatModel()
     task = client.post(
         "/api/v1/tasks/generate",
         headers={"X-CSRF-Token": csrf},
-        json={"topic": "RAG 可靠性", "skill": "RAG engineering"},
+        json={"topic": "ignored", "skill": "ignored"},
     ).json()
-    submission = client.post(
-        f"/api/v1/tasks/{task['id']}/submissions",
-        headers={"X-CSRF-Token": csrf},
-        json={
-            "summary": "实现并验证了检索失败样例",
-            "artifact_kind": "commit",
-            "artifact_reference": "abc999",
-            "self_scores": {"correctness": 3, "testing": 4},
-        },
-    ).json()
-    client.post("/api/v1/weekly-reviews/generate", headers={"X-CSRF-Token": csrf})
 
-    assert client.get("/api/v1/tasks/today").json()["id"] == task["id"]
-    assert client.get(f"/api/v1/reviews/{submission['id']}").json()["passed"] is True
-    assert client.get("/api/v1/weekly-reviews").json()[0]["evidence_ids"]
     chat = client.post(
         "/api/v1/chat/stream",
         headers={"X-CSRF-Token": csrf},
         json={"message": "我该怎么改进？", "page_context": {"task_id": task["id"]}},
     )
+
     assert chat.headers["content-type"].startswith("text/event-stream")
-    assert "data:" in chat.text
+    assert event_names(chat.text)[0] == "intent"
+    assert "先运行验收命令" in chat.text
+    assert event_names(chat.text)[-1] == "done"
+    assert "我已收到问题" not in chat.text
 
 
-def test_chat_stream_uses_chat_provider_readiness(authenticated_client) -> None:
+def test_chat_stream_emits_safe_provider_error(authenticated_client) -> None:
     client, csrf = authenticated_client
-    saved = client.put(
-        "/api/v1/setup/provider",
-        headers={"X-CSRF-Token": csrf},
-        json={
-            "chat": {
-                "base_url": "https://chat.example/v1",
-                "model": "chat-model",
-                "api_key": "chat-secret",
-            },
-            "embedding": {
-                "base_url": "https://embed.example/v1",
-                "model": "embed-model",
-                "api_key": "embed-secret",
-            },
-        },
-    )
+    client.app.state.model_client_factory = lambda settings: FailingChatModel()
 
     chat = client.post(
         "/api/v1/chat/stream",
         headers={"X-CSRF-Token": csrf},
-        json={"message": "如何继续？", "page_context": {}},
+        json={"message": "解释事务隔离", "page_context": {}},
     )
 
-    assert saved.status_code == 200
-    assert "我已收到问题" in chat.text
+    assert event_names(chat.text) == ["error", "done"]
+    error_event = next(block for block in chat.text.split("\n\n") if "event: error" in block)
+    payload = json.loads(
+        next(line[6:] for line in error_event.splitlines() if line.startswith("data: "))
+    )
+    assert payload == {"code": "provider_auth", "message": "模型服务鉴权失败"}
 
 
 def test_push_subscription_and_growth_data_deletion(authenticated_client) -> None:

@@ -68,3 +68,10 @@ class RadarService:
                     select(RadarItemRecord.id).where(RadarItemRecord.source_key.in_(source_keys))
                 ).all()
             )
+
+    def get(self, item_id: str) -> RadarItemRecord | None:
+        with self.session_factory() as db:
+            item = db.get(RadarItemRecord, item_id)
+            if item:
+                db.expunge(item)
+            return item

@@ -4,9 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
+from ..chat_workflow import ChatWorkflowService
 from ..crypto import token_hash
-from ..dependencies import csrf_user, current_user
+from ..dependencies import csrf_session, csrf_user, current_user
+from ..integrations.model_client import ModelClient, ModelClientError
+from ..integrations.provider_settings import resolve_provider_settings
 from ..models import (
+    AuthSession,
     LearningTaskRecord,
     PushSubscriptionRecord,
     ReviewRecord,
@@ -17,8 +21,14 @@ from ..models import (
     WeeklyReviewRecord,
 )
 from ..schemas import ChatRequest, DeleteDataRequest, PushSubscriptionRequest
+from ..services.chat_actions import ChatActionError
+from .growth import task_dict
 
 router = APIRouter(tags=["system"])
+
+
+def sse_event(name: str, payload: dict) -> str:
+    return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 @router.post("/weekly-reviews/generate", status_code=status.HTTP_201_CREATED)
@@ -75,21 +85,68 @@ def export_data(request: Request, _: User = Depends(current_user)) -> dict:
 
 @router.post("/chat/stream")
 def chat_stream(
-    payload: ChatRequest, request: Request, _: User = Depends(csrf_user)
+    payload: ChatRequest,
+    request: Request,
+    session: AuthSession = Depends(csrf_session),
 ) -> StreamingResponse:
     async def events():
-        chat_configured = request.app.state.services.settings.provider_status()["chat"][
-            "api_key_configured"
-        ]
-        message = (
-            "先对照当前任务的 rubric 找到最低分项，再补一条可验证证据。"
-            if not chat_configured
-            else "我已收到问题。请基于当前任务证据继续分析。"
-        )
-        yield f"event: token\ndata: {json.dumps({'text': message}, ensure_ascii=False)}\n\n"
-        yield "event: done\ndata: {}\n\n"
+        try:
+            settings = resolve_provider_settings(
+                request.app.state.settings,
+                request.app.state.services.settings.provider_values(),
+            )
+            factory = getattr(request.app.state, "model_client_factory", ModelClient)
+            workflow = ChatWorkflowService(
+                factory(settings), request.app.state.services.chat_context
+            )
+            result = await workflow.run(payload.message, payload.page_context)
+            yield sse_event(
+                "intent",
+                {
+                    "intent": result.intent,
+                    "confidence": result.confidence,
+                    "needs_action": result.needs_action,
+                },
+            )
+            for offset in range(0, len(result.answer), 24):
+                yield sse_event("token", {"text": result.answer[offset : offset + 24]})
+            if result.action:
+                proposal = request.app.state.services.chat_actions.create(session.id, result.action)
+                yield sse_event("action_proposal", proposal)
+        except ModelClientError as exc:
+            yield sse_event("error", {"code": exc.code, "message": str(exc)})
+        except ChatActionError as exc:
+            yield sse_event("error", {"code": "action_invalid", "message": exc.message})
+        except Exception:
+            yield sse_event("error", {"code": "tutor_internal", "message": "导师暂时无法完成请求"})
+        yield sse_event("done", {})
 
     return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.post("/chat/actions/{action_id}/confirm")
+async def confirm_chat_action(
+    action_id: str,
+    request: Request,
+    session: AuthSession = Depends(csrf_session),
+) -> dict:
+    try:
+        task = await request.app.state.services.chat_actions.confirm(action_id, session.id)
+        return task_dict(task)
+    except ChatActionError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+
+
+@router.post("/chat/actions/{action_id}/cancel")
+def cancel_chat_action(
+    action_id: str,
+    request: Request,
+    session: AuthSession = Depends(csrf_session),
+) -> dict:
+    try:
+        return request.app.state.services.chat_actions.cancel(action_id, session.id)
+    except ChatActionError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
 
 
 @router.post("/notifications/push-subscriptions", status_code=status.HTTP_201_CREATED)
