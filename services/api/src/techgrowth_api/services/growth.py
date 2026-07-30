@@ -46,7 +46,7 @@ class GrowthService:
             task = LearningTaskRecord(
                 skill_name=skill,
                 status="ready",
-                **draft.model_dump(exclude_defaults=True),
+                **draft.model_dump(mode="json"),
             )
             db.add(task)
             db.commit()
@@ -72,7 +72,7 @@ class GrowthService:
             task = LearningTaskRecord(
                 skill_name=skill,
                 status="ready",
-                **draft.model_dump(exclude_defaults=True),
+                **draft.model_dump(mode="json"),
             )
             db.add(task)
             db.commit()

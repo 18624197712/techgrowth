@@ -104,10 +104,18 @@ class LearningTaskRecord(Base):
     skill_name: Mapped[str] = mapped_column(String(120), index=True)
     expected_minutes: Mapped[int] = mapped_column(Integer)
     objective: Mapped[str] = mapped_column(Text)
+    curriculum_version: Mapped[str] = mapped_column(String(24), default="legacy")
+    track_key: Mapped[str] = mapped_column(String(40), default="legacy")
+    stage_key: Mapped[str] = mapped_column(String(40), default="legacy")
+    node_key: Mapped[str] = mapped_column(String(120), default="legacy", index=True)
+    prerequisites: Mapped[list[str]] = mapped_column(JSON, default=list)
     instructions: Mapped[list[str]] = mapped_column(JSON)
     source_ids: Mapped[list[str]] = mapped_column(JSON)
     submission_kinds: Mapped[list[str]] = mapped_column(JSON)
+    deliverables: Mapped[list[str]] = mapped_column(JSON, default=list)
+    acceptance_checks: Mapped[list[dict]] = mapped_column(JSON, default=list)
     rubric: Mapped[list[dict]] = mapped_column(JSON)
+    remediation_hint: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(24), default="ready")
     is_remediation: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -231,7 +239,21 @@ class AgentRunRecord(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     references: Mapped[list[str]] = mapped_column(JSON, default=list)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentActionRecord(Base):
+    __tablename__ = "agent_actions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("auth_sessions.id", ondelete="CASCADE"), index=True
+    )
+    action_type: Mapped[str] = mapped_column(String(80), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
