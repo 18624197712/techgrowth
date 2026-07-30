@@ -65,6 +65,16 @@ function decodeEvent(raw: string): ChatEvent | null {
         summary: String(payload.summary),
         expires_at: String(payload.expires_at),
       }
+    if (eventName === 'tool_call')
+      return {
+        type: 'tool_call', id: String(payload.id), name: String(payload.name),
+        arguments: (payload.arguments ?? {}) as Record<string, unknown>,
+      }
+    if (eventName === 'tool_result')
+      return {
+        type: 'tool_result', id: String(payload.id), name: String(payload.name),
+        result: (payload.result ?? {}) as Record<string, unknown>,
+      }
     if (eventName === 'error')
       return { type: 'error', code: String(payload.code), message: String(payload.message) }
     if (eventName === 'done') return { type: 'done' }

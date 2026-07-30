@@ -44,6 +44,18 @@ const task = {
     },
   ],
   remediation_hint: '修复最低分项后重新运行验收检查',
+  task_kind: 'coding',
+  learning_objectives: ['理解超时和鉴权错误的边界', '编写可重复运行的测试'],
+  theory_brief: '可靠的模型客户端必须区分鉴权、限流、超时和服务端错误。',
+  problem_statement: '实现一个模型客户端适配器，并用固定响应验证四类错误映射。',
+  constraints: ['不得调用真实模型', '错误消息不得包含 API Key'],
+  starter_context: '从现有 HTTP 客户端接口开始，不需要重写业务服务。',
+  revealed_hints: [],
+  revealed_hint_level: 0,
+  solution_outline: null,
+  solution_revealed_at: null,
+  replaces_task_id: null,
+  regeneration_reason: '',
   status: 'ready',
   created_at: '2026-07-30T08:10:00Z',
 }
@@ -98,6 +110,12 @@ function mockFetch(
         )
       }
       if (url.endsWith('/tasks/today')) return Response.json(task)
+      if (url.includes('/hints/1/reveal'))
+        return Response.json({ ...task, revealed_hints: ['先列出状态码到领域错误的映射表'], revealed_hint_level: 1 })
+      if (url.endsWith('/solution/reveal'))
+        return Response.json({ ...task, solution_outline: '先定义错误类型，再用参数化测试覆盖映射。', solution_revealed_at: '2026-07-30T10:00:00Z' })
+      if (url.endsWith('/regenerate'))
+        return Response.json({ ...task, id: 'task-2', title: '重出：实现可验证的模型错误适配器' })
       if (url.endsWith('/radar/status'))
         return Response.json({
           id: 'run-1', status: 'partial', successful_sources: 5,
@@ -195,6 +213,27 @@ describe('TechGrowth app', () => {
     expect(screen.getByText('pytest -q')).toBeInTheDocument()
     expect(screen.getByText('模型客户端实现')).toBeInTheDocument()
     expect(screen.getByText('覆盖超时')).toBeInTheDocument()
+    expect(screen.getByText(task.theory_brief)).toBeInTheDocument()
+    expect(screen.getByText(task.problem_statement)).toBeInTheDocument()
+    expect(screen.getByText(task.constraints[0])).toBeInTheDocument()
+  })
+
+  it('reveals tiered guidance and regenerates an unclear task', async () => {
+    const requests: string[] = []
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    mockFetch(true, (url) => requests.push(url))
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '查看一级提示' }))
+    expect(await screen.findByText('先列出状态码到领域错误的映射表')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '查看解题思路' }))
+    expect(await screen.findByText('先定义错误类型，再用参数化测试覆盖映射。')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '重新出题' }))
+
+    expect(await screen.findByRole('heading', { name: '重出：实现可验证的模型错误适配器' })).toBeInTheDocument()
+    expect(requests.some((url) => url.endsWith('/tasks/task-1/regenerate'))).toBe(true)
   })
 
   it('shows radar run status and refreshes it', async () => {

@@ -160,19 +160,47 @@ function TodayView({ task, radar, onTask, onProfile }: { task: LearningTask | nu
     } finally { setBusy(false) }
   }
 
+  async function regenerate() {
+    if (!task || !window.confirm('重新出题会替换当前未提交任务，是否继续？')) return
+    setBusy(true)
+    try {
+      onTask(await api<LearningTask>(`/tasks/${task.id}/regenerate`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': `web-${task.id}-${Date.now()}` },
+        body: JSON.stringify({ reason: '题目不够明确，需要重新生成' }),
+      }))
+    } finally { setBusy(false) }
+  }
+
+  async function revealHint(level: number) {
+    if (!task) return
+    onTask(await api<LearningTask>(`/tasks/${task.id}/hints/${level}/reveal`, { method: 'POST' }))
+  }
+
+  async function revealSolution() {
+    if (!task) return
+    onTask(await api<LearningTask>(`/tasks/${task.id}/solution/reveal`, { method: 'POST' }))
+  }
+
   if (!task) return <section><SectionHeader eyebrow="今天" title="准备第一项成长任务" /><div className="empty-work"><Target size={28} /><p>从课程路线中选择当前最需要补强的技能。</p><button className="primary-button compact" onClick={() => void generate()} disabled={busy}><Sparkles size={17} />生成今日任务</button></div></section>
 
   return (
     <section>
-      <SectionHeader eyebrow="今日成长任务" title={task.title} action={<span className="time-badge">{task.expected_minutes} 分钟</span>} />
+      <SectionHeader eyebrow="今日成长任务" title={task.title} action={<div className="task-actions"><span className="time-badge">{task.expected_minutes} 分钟</span><button className="secondary-button" onClick={() => void regenerate()} disabled={busy}><RefreshCw size={16} />重新出题</button></div>} />
       <div className="task-layout">
         <div className="task-main">
           <p className="task-objective">{task.objective}</p>
+          {task.theory_brief && <div className="content-section"><h2>理论基础</h2><p>{task.theory_brief}</p></div>}
+          {task.problem_statement && <div className="content-section problem-statement"><h2>题目</h2><p>{task.problem_statement}</p>{task.starter_context && <small>{task.starter_context}</small>}</div>}
+          {task.learning_objectives.length > 0 && <div className="content-section"><h2>学习目标</h2><ul>{task.learning_objectives.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+          {task.constraints.length > 0 && <div className="content-section"><h2>约束条件</h2><ul>{task.constraints.map((item) => <li key={item}>{item}</li>)}</ul></div>}
           {task.prerequisites.length > 0 && <div className="content-section"><h2>开始前</h2><ul>{task.prerequisites.map((item) => <li key={item}>{item}</li>)}</ul></div>}
           <div className="content-section"><h2>执行步骤</h2><ol className="task-steps">{task.instructions.map((item, index) => typeof item === 'string' ? <li key={`${index}-${item}`}>{item}</li> : <li key={`${index}-${item.action}`}><div><strong>{item.action}</strong><span>{item.minutes} 分钟</span></div><p>{item.expected_result}</p></li>)}</ol></div>
           {task.deliverables.length > 0 && <div className="content-section"><h2>必须提交</h2><ul>{task.deliverables.map((item) => <li key={item}>{item}</li>)}</ul></div>}
           {task.acceptance_checks.length > 0 && <div className="content-section"><h2>验收检查</h2><div className="check-list">{task.acceptance_checks.map((check) => <div key={`${check.method}-${check.instruction}`}><code>{check.instruction}</code><p>{check.expected_result}</p></div>)}</div></div>}
           <div className="content-section"><h2>验收 Rubric</h2><div className="rubric-list">{task.rubric.map((item) => <div className="rubric-row" key={item.key}><FileCheck2 size={17} /><div><strong>{item.label}</strong>{item.description && <p>{item.description}</p>}{item.score_anchors && <div className="score-anchors">{Object.entries(item.score_anchors).map(([score, label]) => <span key={score}><b>{score}</b>{label}</span>)}</div>}</div>{item.critical && <small>关键项</small>}<select aria-label={`${item.label}评分`} value={scores[item.key] ?? 3} onChange={(event) => setScores({ ...scores, [item.key]: Number(event.target.value) })}>{[0, 1, 2, 3, 4].map((score) => <option value={score} key={score}>{score} / 4</option>)}</select></div>)}</div></div>
+          <div className="content-section guidance-section"><h2>分层提示</h2>{task.revealed_hints.length > 0 && <ol>{task.revealed_hints.map((hint, index) => <li key={`${index}-${hint}`}>{hint}</li>)}</ol>}{task.revealed_hint_level < 3 && <button className="secondary-button" onClick={() => void revealHint(task.revealed_hint_level + 1)}>查看{['一级', '二级', '三级'][task.revealed_hint_level]}提示</button>}</div>
+          <div className="content-section guidance-section"><h2>解题思路</h2>{task.solution_outline ? <p>{task.solution_outline}</p> : <button className="secondary-button" onClick={() => void revealSolution()}>查看解题思路</button>}</div>
           <form className="submission-form" onSubmit={submit}><h2>提交成果</h2><label htmlFor="summary">成果摘要</label><textarea id="summary" value={summary} onChange={(event) => setSummary(event.target.value)} required minLength={5} /><label htmlFor="reference">Commit / PR / 报告引用</label><input id="reference" value={reference} onChange={(event) => setReference(event.target.value)} required /><button className="primary-button compact" disabled={busy}><CheckCircle2 size={17} />提交审阅</button></form>
           {result && <div className={`review-result ${result.passed ? 'passed' : 'retry'}`}><strong>{result.passed ? '审阅通过' : '需要补做'}</strong><p>{result.feedback}</p></div>}
         </div>

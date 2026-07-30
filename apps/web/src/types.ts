@@ -33,6 +33,18 @@ export type LearningTask = {
   acceptance_checks: AcceptanceCheck[]
   rubric: RubricCriterion[]
   remediation_hint: string
+  task_kind: string
+  learning_objectives: string[]
+  theory_brief: string
+  problem_statement: string
+  constraints: string[]
+  starter_context: string
+  revealed_hints: string[]
+  revealed_hint_level: number
+  solution_outline: string | null
+  solution_revealed_at: string | null
+  replaces_task_id: string | null
+  regeneration_reason: string
   status: string
   created_at: string
 }
@@ -113,6 +125,8 @@ export type ChatEvent =
   | { type: 'intent'; intent: ChatIntent; confidence: number; needs_action: boolean }
   | { type: 'token'; text: string }
   | { type: 'action_proposal'; id: string; summary: string; expires_at: string }
+  | { type: 'tool_call'; id: string; name: string; arguments: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; name: string; result: Record<string, unknown> }
   | { type: 'error'; code: string; message: string }
   | { type: 'done' }
 
