@@ -10,7 +10,9 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class ModelClientError(RuntimeError):
-    pass
+    def __init__(self, message: str, code: str = "provider_error") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class TokenBudgetExceeded(ModelClientError):
@@ -40,6 +42,53 @@ class ModelClient:
             and (self.settings.embedding_api_key or self.settings.openai_api_key)
             and self.settings.embedding_model
         )
+
+    async def complete(self, system_prompt: str, user_prompt: str) -> str:
+        if not self.configured:
+            raise ModelClientError(
+                "Chat model provider is not configured", "provider_not_configured"
+            )
+        base_url = self.settings.chat_base_url or self.settings.openai_base_url
+        api_key = self.settings.chat_api_key or self.settings.openai_api_key
+        try:
+            async with httpx.AsyncClient(
+                base_url=base_url.rstrip("/"),
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=60,
+                transport=self.transport,
+            ) as client:
+                response = await client.post(
+                    "/chat/completions",
+                    json={
+                        "model": self.settings.chat_model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                    },
+                )
+        except httpx.TimeoutException as exc:
+            raise ModelClientError("模型服务响应超时", "provider_timeout") from exc
+        if response.status_code in {401, 403}:
+            raise ModelClientError("模型服务鉴权失败", "provider_auth")
+        if response.status_code == 429:
+            raise ModelClientError("模型服务请求过于频繁", "provider_rate_limited")
+        if response.status_code >= 400:
+            raise ModelClientError("模型服务暂时不可用", "provider_unavailable")
+        try:
+            payload = response.json()
+            content = payload["choices"][0]["message"]["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("empty model content")
+        except (ValueError, TypeError, KeyError, IndexError) as exc:
+            raise ModelClientError("模型返回内容无法解析", "provider_response_invalid") from exc
+        usage = payload.get("usage", {})
+        self.tokens_used += int(usage.get("prompt_tokens", 0)) + int(
+            usage.get("completion_tokens", 0)
+        )
+        if self.tokens_used > self.settings.max_daily_tokens:
+            raise TokenBudgetExceeded("Model daily token budget exceeded")
+        return content
 
     async def structured(
         self, system_prompt: str, user_prompt: str, output_model: type[ModelT]

@@ -4,6 +4,7 @@ from ..config import Settings
 from ..db import Database
 from .artifacts import TempArtifactStore
 from .auth import AuthService
+from .chat_context import ChatContextService
 from .connector import ConnectorService
 from .daily_tasks import DailyTaskService
 from .growth import GrowthService
@@ -26,6 +27,7 @@ class ServiceContainer:
     artifacts: TempArtifactStore
     daily_tasks: DailyTaskService
     radar_jobs: RadarJobService
+    chat_context: ChatContextService
 
     @classmethod
     def build(cls, database: Database, settings: Settings) -> "ServiceContainer":
@@ -36,6 +38,7 @@ class ServiceContainer:
         provider_settings = SettingsService(factory, auth.cipher)
         daily_tasks = DailyTaskService(settings, growth, radar, provider_settings)
         radar_jobs = RadarJobService(factory, settings, radar, provider_settings)
+        chat_context = ChatContextService(factory)
         return cls(
             auth=auth,
             growth=growth,
@@ -47,4 +50,5 @@ class ServiceContainer:
             artifacts=TempArtifactStore(settings.temp_upload_dir, auth.cipher),
             daily_tasks=daily_tasks,
             radar_jobs=radar_jobs,
+            chat_context=chat_context,
         )

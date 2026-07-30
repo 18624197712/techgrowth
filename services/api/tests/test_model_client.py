@@ -27,13 +27,7 @@ async def test_chat_and_embedding_requests_use_independent_providers() -> None:
             return httpx.Response(
                 200,
                 json={
-                    "choices": [
-                        {
-                            "message": {
-                                "content": '{"title":"Task","source_ids":["s1"]}'
-                            }
-                        }
-                    ],
+                    "choices": [{"message": {"content": '{"title":"Task","source_ids":["s1"]}'}}],
                     "usage": {"prompt_tokens": 1, "completion_tokens": 1},
                 },
             )
@@ -87,6 +81,63 @@ async def test_missing_embedding_configuration_only_blocks_embedding() -> None:
     assert client.configured is True
     with pytest.raises(ModelClientError, match="Embedding model provider"):
         await client.embedding("text")
+
+
+@pytest.mark.asyncio
+async def test_natural_completion_uses_chat_provider() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "这是模型生成的真实回答"}}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 5},
+            },
+        )
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="chat-secret",
+            chat_model="chat-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await client.complete("system", "user")
+
+    assert result == "这是模型生成的真实回答"
+    assert str(requests[0].url) == "https://chat.example/v1/chat/completions"
+    assert requests[0].headers["authorization"] == "Bearer chat-secret"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "error_code"),
+    [(401, "provider_auth"), (403, "provider_auth"), (429, "provider_rate_limited")],
+)
+async def test_natural_completion_normalizes_provider_errors(
+    status_code: int, error_code: str
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, json={"error": "do not expose this"})
+
+    client = ModelClient(
+        Settings(
+            chat_base_url="https://chat.example/v1",
+            chat_api_key="chat-secret",
+            chat_model="chat-model",
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ModelClientError) as error:
+        await client.complete("system", "user")
+
+    assert error.value.code == error_code
+    assert "do not expose this" not in str(error.value)
 
 
 @pytest.mark.asyncio
