@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from ..domain.curriculum import CURRICULUM, CurriculumSelector
 from ..domain.growth import Evidence, EvidencePolicy, RubricScore
 from ..domain.tasks import TaskDraft, TaskPolicy
 from ..models import (
@@ -21,8 +20,9 @@ class GrowthService:
         {"key": "testing", "label": "验证与测试", "critical": False},
     ]
 
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory, curriculum=None) -> None:
         self.session_factory = session_factory
+        self.curriculum = curriculum
 
     def generate_task(self, topic: str, skill: str) -> LearningTaskRecord:
         with self.session_factory() as db:
@@ -68,6 +68,8 @@ class GrowthService:
             return None
 
     def next_curriculum_node(self):
+        if self.curriculum is not None:
+            return self.curriculum.next_node(datetime.now(UTC).date())
         with self.session_factory() as db:
             tasks = list(
                 db.scalars(
@@ -79,15 +81,17 @@ class GrowthService:
         remediation_task = next(
             (item for item in reversed(curriculum_tasks) if item.status == "remediation"), None
         )
+        from ..domain.curriculum import LEGACY_CURRICULUM, CurriculumSelector
+
         remediation = (
-            CURRICULUM.node(remediation_task.node_key) if remediation_task is not None else None
+            LEGACY_CURRICULUM.node(remediation_task.node_key)
+            if remediation_task is not None
+            else None
         )
         recent_tracks = [item.track_key for item in curriculum_tasks if not item.is_remediation][
             -10:
         ]
-        return CurriculumSelector(CURRICULUM).select(
-            recent_tracks, completed, remediation=remediation
-        )
+        return CurriculumSelector(LEGACY_CURRICULUM).select(recent_tracks, completed, remediation)
 
     def recent_topics(self) -> list[tuple[str, datetime]]:
         with self.session_factory() as db:

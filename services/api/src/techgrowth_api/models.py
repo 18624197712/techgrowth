@@ -77,6 +77,15 @@ class SkillEvidenceRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class CurriculumStateRecord(Base):
+    __tablename__ = "curriculum_state"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    active_track_key: Mapped[str] = mapped_column(String(40), default="java")
+    algorithm_days_per_week: Mapped[int] = mapped_column(Integer, default=2)
+    catalog_version: Mapped[str] = mapped_column(String(24), default="v2")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class RadarItemRecord(Base):
     __tablename__ = "radar_items"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

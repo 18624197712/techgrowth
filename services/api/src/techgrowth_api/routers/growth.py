@@ -3,9 +3,41 @@ from sqlalchemy import select
 
 from ..dependencies import csrf_user, current_user
 from ..models import LearningTaskRecord, ReviewRecord, User, WeeklyReviewRecord
-from ..schemas import SubmissionRequest, TaskGenerateRequest
+from ..schemas import (
+    ActiveTrackRequest,
+    AlgorithmFrequencyRequest,
+    SubmissionRequest,
+    TaskGenerateRequest,
+)
 
 router = APIRouter(tags=["growth"])
+
+
+@router.get("/curriculum")
+def curriculum(request: Request, _: User = Depends(current_user)) -> dict:
+    return request.app.state.services.curriculum.payload()
+
+
+@router.put("/curriculum/active-track")
+def switch_active_track(
+    payload: ActiveTrackRequest, request: Request, _: User = Depends(csrf_user)
+) -> dict:
+    try:
+        request.app.state.services.curriculum.switch_track(payload.track_key)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return request.app.state.services.curriculum.payload()
+
+
+@router.put("/curriculum/algorithm-frequency")
+def set_algorithm_frequency(
+    payload: AlgorithmFrequencyRequest, request: Request, _: User = Depends(csrf_user)
+) -> dict:
+    try:
+        request.app.state.services.curriculum.set_algorithm_frequency(payload.days_per_week)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return request.app.state.services.curriculum.payload()
 
 
 def task_dict(task) -> dict:

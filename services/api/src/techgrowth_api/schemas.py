@@ -15,6 +15,14 @@ class TaskGenerateRequest(BaseModel):
     skill: str = Field(min_length=2, max_length=120)
 
 
+class ActiveTrackRequest(BaseModel):
+    track_key: str = Field(min_length=2, max_length=40)
+
+
+class AlgorithmFrequencyRequest(BaseModel):
+    days_per_week: int = Field(ge=0, le=7)
+
+
 class SubmissionRequest(BaseModel):
     summary: str = Field(min_length=5, max_length=10_000)
     artifact_kind: str

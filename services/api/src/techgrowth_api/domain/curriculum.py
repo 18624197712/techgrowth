@@ -378,4 +378,385 @@ def _build_catalog() -> CurriculumCatalog:
     return CurriculumCatalog("v1", tuple(tracks))
 
 
-CURRICULUM = _build_catalog()
+LEGACY_CURRICULUM = _build_catalog()
+
+
+V2_TRACK_TOPICS: tuple[tuple[str, str, tuple[tuple[str, str, str, tuple[str, ...]], ...]], ...] = (
+    (
+        "java",
+        "Java + Spring Cloud",
+        (
+            (
+                "foundation",
+                "java-core",
+                "掌握 Java 类型系统、集合与异常边界",
+                ("Java", "collections"),
+            ),
+            ("foundation", "spring-ioc", "理解 Spring IoC、配置与生命周期", ("Spring", "IoC")),
+            (
+                "foundation",
+                "spring-web",
+                "实现有明确契约的 Spring Web API",
+                ("Spring Boot", "REST"),
+            ),
+            (
+                "practice",
+                "data-transactions",
+                "使用持久化与事务实现一致业务规则",
+                ("JPA", "transaction"),
+            ),
+            (
+                "practice",
+                "service-integration",
+                "实现有超时和降级的服务调用",
+                ("OpenFeign", "resilience"),
+            ),
+            ("practice", "messaging", "实现可验证的异步消息和幂等消费", ("Kafka", "idempotency")),
+            ("production", "testing", "建立分层自动化测试和契约门禁", ("JUnit", "Testcontainers")),
+            (
+                "production",
+                "observability",
+                "用日志、指标与追踪定位服务故障",
+                ("Micrometer", "tracing"),
+            ),
+            (
+                "production",
+                "security-performance",
+                "验证服务安全与性能基线",
+                ("Spring Security", "performance"),
+            ),
+            (
+                "architecture",
+                "distributed-consistency",
+                "设计分布式一致性和失败恢复",
+                ("distributed transaction", "Saga"),
+            ),
+            (
+                "architecture",
+                "service-governance",
+                "设计注册发现、配置与流量治理",
+                ("Spring Cloud", "governance"),
+            ),
+            (
+                "architecture",
+                "platform-architecture",
+                "完成可演进的 Java 服务平台架构",
+                ("platform engineering", "DDD"),
+            ),
+        ),
+    ),
+    (
+        "python_ai",
+        "Python + FastAPI/AI",
+        (
+            (
+                "foundation",
+                "python-core",
+                "掌握 Python 类型、数据模型与异常边界",
+                ("Python", "typing"),
+            ),
+            (
+                "foundation",
+                "fastapi-contract",
+                "实现 Pydantic 驱动的 FastAPI 契约",
+                ("FastAPI", "Pydantic"),
+            ),
+            (
+                "foundation",
+                "model-api",
+                "正确处理模型 API、流式响应与错误",
+                ("OpenAI compatible", "SSE"),
+            ),
+            (
+                "practice",
+                "async-data",
+                "实现异步 I/O、数据库事务与任务边界",
+                ("asyncio", "SQLAlchemy"),
+            ),
+            ("practice", "rag", "构建带引用和检索评测的 RAG 闭环", ("RAG", "pgvector")),
+            (
+                "practice",
+                "agents",
+                "实现有权限和状态边界的 Agent 工具调用",
+                ("LangGraph", "tool calling"),
+            ),
+            (
+                "production",
+                "evaluation",
+                "建立固定数据集和模型质量评测",
+                ("LLM evaluation", "dataset"),
+            ),
+            (
+                "production",
+                "observability",
+                "记录模型 token、延迟、引用与失败",
+                ("LLM observability", "tracing"),
+            ),
+            (
+                "production",
+                "security-cost",
+                "控制提示注入、敏感数据与模型成本",
+                ("prompt injection", "cost control"),
+            ),
+            (
+                "architecture",
+                "model-routing",
+                "设计多模型路由、降级与容量策略",
+                ("model routing", "fallback"),
+            ),
+            (
+                "architecture",
+                "knowledge-platform",
+                "设计知识摄取、索引与治理平台",
+                ("knowledge platform", "retrieval"),
+            ),
+            (
+                "architecture",
+                "ai-platform",
+                "完成可评测、可审计的 AI 平台架构",
+                ("AI platform", "governance"),
+            ),
+        ),
+    ),
+    (
+        "go",
+        "Go",
+        (
+            ("foundation", "language-core", "掌握 Go 类型、接口与错误模型", ("Go", "interfaces")),
+            (
+                "foundation",
+                "concurrency",
+                "正确使用 goroutine、channel 与 context",
+                ("goroutine", "context"),
+            ),
+            (
+                "foundation",
+                "toolchain",
+                "建立模块、测试、Lint 与基准工具链",
+                ("go test", "benchmark"),
+            ),
+            (
+                "practice",
+                "http-service",
+                "实现有契约和中间件的 HTTP 服务",
+                ("net/http", "middleware"),
+            ),
+            (
+                "practice",
+                "data-access",
+                "实现事务化数据访问与连接池治理",
+                ("database/sql", "transaction"),
+            ),
+            (
+                "practice",
+                "distributed-client",
+                "实现有超时、重试和限流的服务客户端",
+                ("gRPC", "rate limiting"),
+            ),
+            (
+                "production",
+                "testing",
+                "验证并发、竞态与集成边界",
+                ("race detector", "integration test"),
+            ),
+            ("production", "profiling", "使用 pprof 定位 CPU、内存和阻塞", ("pprof", "profiling")),
+            (
+                "production",
+                "operations",
+                "建立可观测、安全且可回滚的服务",
+                ("OpenTelemetry", "deployment"),
+            ),
+            (
+                "architecture",
+                "high-concurrency",
+                "设计高并发服务的背压与容量",
+                ("backpressure", "capacity"),
+            ),
+            (
+                "architecture",
+                "distributed-systems",
+                "处理分布式一致性与故障模型",
+                ("consensus", "distributed systems"),
+            ),
+            (
+                "architecture",
+                "cloud-platform",
+                "完成 Go 云原生平台架构",
+                ("Kubernetes", "platform engineering"),
+            ),
+        ),
+    ),
+    (
+        "node_ts",
+        "Node.js + TypeScript",
+        (
+            (
+                "foundation",
+                "typescript",
+                "掌握 TypeScript 类型系统和边界验证",
+                ("TypeScript", "type system"),
+            ),
+            ("foundation", "node-runtime", "理解事件循环、流与错误传播", ("Node.js", "event loop")),
+            ("foundation", "api-contract", "实现有 Schema 的 Node API", ("Fastify", "OpenAPI")),
+            (
+                "practice",
+                "data-transactions",
+                "实现数据访问、事务与迁移",
+                ("PostgreSQL", "migration"),
+            ),
+            ("practice", "events-jobs", "实现幂等事件和可补跑后台任务", ("event driven", "jobs")),
+            ("practice", "testing", "建立单元、集成和契约测试", ("Vitest", "contract testing")),
+            (
+                "production",
+                "performance",
+                "分析事件循环延迟、内存和吞吐",
+                ("profiling", "performance"),
+            ),
+            ("production", "security", "验证鉴权、输入和供应链安全", ("OWASP", "supply chain")),
+            (
+                "production",
+                "observability",
+                "建立日志、指标、追踪和发布门禁",
+                ("OpenTelemetry", "CI"),
+            ),
+            (
+                "architecture",
+                "service-boundaries",
+                "划分模块与服务演进边界",
+                ("modular monolith", "DDD"),
+            ),
+            (
+                "architecture",
+                "event-architecture",
+                "设计可靠事件驱动和一致性策略",
+                ("event sourcing", "outbox"),
+            ),
+            (
+                "architecture",
+                "platform",
+                "完成 TypeScript 服务平台架构",
+                ("platform engineering", "governance"),
+            ),
+        ),
+    ),
+    (
+        "algorithms",
+        "数据结构与算法",
+        (
+            ("foundation", "complexity", "分析时间和空间复杂度", ("complexity", "Big O")),
+            ("foundation", "arrays", "使用数组和双指针解决边界问题", ("array", "two pointers")),
+            (
+                "foundation",
+                "linked-lists",
+                "实现链表操作并验证指针不变量",
+                ("linked list", "pointer"),
+            ),
+            ("foundation", "stacks-queues", "用栈和队列建模顺序约束", ("stack", "queue")),
+            ("foundation", "hashing", "使用哈希结构优化查找和计数", ("hash map", "set")),
+            (
+                "foundation",
+                "binary-search",
+                "为单调空间实现无越界二分",
+                ("binary search", "boundary"),
+            ),
+            ("practice", "trees", "实现树遍历并维护递归不变量", ("tree", "traversal")),
+            ("practice", "heaps", "使用堆解决动态 Top K 问题", ("heap", "priority queue")),
+            ("practice", "graphs", "使用 BFS 和 DFS 处理图可达性", ("graph", "BFS")),
+            ("practice", "sorting", "比较排序算法和稳定性边界", ("sorting", "stability")),
+            ("practice", "recursion", "用递归和分治缩小问题规模", ("recursion", "divide conquer")),
+            ("practice", "backtracking", "用剪枝控制回溯搜索空间", ("backtracking", "pruning")),
+            ("production", "greedy", "证明贪心选择的正确性边界", ("greedy", "proof")),
+            (
+                "production",
+                "dynamic-programming",
+                "定义状态和转移解决优化问题",
+                ("dynamic programming", "state"),
+            ),
+            (
+                "production",
+                "shortest-path",
+                "选择合适的最短路径算法",
+                ("Dijkstra", "shortest path"),
+            ),
+            ("production", "union-find", "用并查集维护动态连通性", ("union find", "connectivity")),
+            (
+                "production",
+                "string-matching",
+                "实现并验证高效字符串匹配",
+                ("KMP", "string matching"),
+            ),
+            (
+                "production",
+                "range-query",
+                "使用树状数组或线段树处理区间查询",
+                ("segment tree", "range query"),
+            ),
+            (
+                "architecture",
+                "algorithm-selection",
+                "根据约束选择算法和数据结构",
+                ("algorithm design", "tradeoff"),
+            ),
+            (
+                "architecture",
+                "concurrency-structures",
+                "分析并发数据结构的正确性",
+                ("concurrent data structure", "linearizability"),
+            ),
+            (
+                "architecture",
+                "distributed-algorithms",
+                "理解一致性、选举和逻辑时钟",
+                ("consensus", "logical clock"),
+            ),
+            (
+                "architecture",
+                "index-design",
+                "把树、哈希和过滤器用于存储索引",
+                ("B-tree", "Bloom filter"),
+            ),
+            (
+                "architecture",
+                "scheduling",
+                "用算法权衡调度公平性和吞吐",
+                ("scheduling", "fairness"),
+            ),
+            (
+                "architecture",
+                "system-problem",
+                "完成从业务约束到算法方案的系统设计",
+                ("system algorithm", "optimization"),
+            ),
+        ),
+    ),
+)
+
+
+def _build_v2_catalog() -> CurriculumCatalog:
+    tracks: list[CurriculumTrack] = []
+    for track_key, label, definitions in V2_TRACK_TOPICS:
+        nodes: list[CurriculumNode] = []
+        previous: str | None = None
+        for order, (stage, slug, objective, keywords) in enumerate(definitions, start=1):
+            key = f"{track_key}-{stage}-{slug}"
+            nodes.append(
+                CurriculumNode(
+                    key=key,
+                    track_key=track_key,
+                    stage_key=stage,
+                    order=order,
+                    title=objective,
+                    objective=objective,
+                    prerequisites=(previous,) if previous else (),
+                    deliverable_kinds=("commit", "report", "answer"),
+                    acceptance_types=("command", "inspection", "answer"),
+                    radar_keywords=keywords,
+                )
+            )
+            previous = key
+        weight = 0.0 if track_key == "algorithms" else 0.25
+        tracks.append(CurriculumTrack(track_key, label, weight, tuple(nodes)))
+    return CurriculumCatalog("v2", tuple(tracks))
+
+
+CURRICULUM = _build_v2_catalog()

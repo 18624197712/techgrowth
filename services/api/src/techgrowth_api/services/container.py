@@ -7,6 +7,7 @@ from .auth import AuthService
 from .chat_actions import ChatActionService
 from .chat_context import ChatContextService
 from .connector import ConnectorService
+from .curriculum import CurriculumService
 from .daily_tasks import DailyTaskService
 from .growth import GrowthService
 from .notifications import NotificationService
@@ -30,12 +31,14 @@ class ServiceContainer:
     radar_jobs: RadarJobService
     chat_context: ChatContextService
     chat_actions: ChatActionService
+    curriculum: CurriculumService
 
     @classmethod
     def build(cls, database: Database, settings: Settings) -> "ServiceContainer":
         factory = database.session_factory
         auth = AuthService(factory, settings)
-        growth = GrowthService(factory)
+        curriculum = CurriculumService(factory)
+        growth = GrowthService(factory, curriculum)
         radar = RadarService(factory)
         provider_settings = SettingsService(factory, auth.cipher)
         daily_tasks = DailyTaskService(settings, growth, radar, provider_settings)
@@ -55,4 +58,5 @@ class ServiceContainer:
             radar_jobs=radar_jobs,
             chat_context=chat_context,
             chat_actions=chat_actions,
+            curriculum=curriculum,
         )
