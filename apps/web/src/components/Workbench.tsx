@@ -1,0 +1,209 @@
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import {
+  Bell, Bot, CheckCircle2, ChevronRight, CircleGauge, Code2, ExternalLink,
+  FileCheck2, GitBranch, History, LoaderCircle, LogOut, Menu, Radar,
+  RefreshCw, Save, Settings, ShieldCheck, Sparkles, Target, XCircle,
+} from 'lucide-react'
+
+import { ApiError, api } from '../api'
+import { decodeVapidPublicKey } from '../push'
+import type {
+  LearningTask, NotificationPreference, RadarItem, Repository, SetupStatus,
+  SkillProfile, User, WeeklyReview,
+} from '../types'
+import { ChatDrawer } from './ChatDrawer'
+
+type View = 'today' | 'radar' | 'repositories' | 'growth' | 'weekly' | 'settings'
+
+const navItems: { id: View; label: string; icon: typeof Target }[] = [
+  { id: 'today', label: '今日任务', icon: Target },
+  { id: 'radar', label: '技术雷达', icon: Radar },
+  { id: 'repositories', label: '项目与仓库', icon: GitBranch },
+  { id: 'growth', label: '成长证据', icon: CircleGauge },
+  { id: 'weekly', label: '周复盘', icon: History },
+  { id: 'settings', label: '设置', icon: Settings },
+]
+
+export function Workbench({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const [view, setView] = useState<View>('today')
+  const [task, setTask] = useState<LearningTask | null>(null)
+  const [radar, setRadar] = useState<RadarItem[]>([])
+  const [profile, setProfile] = useState<SkillProfile[]>([])
+  const [repositories, setRepositories] = useState<Repository[]>([])
+  const [weekly, setWeekly] = useState<WeeklyReview[]>([])
+  const [setup, setSetup] = useState<SetupStatus | null>(null)
+  const [preferences, setPreferences] = useState<NotificationPreference[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [chatOpen, setChatOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const taskRequest = api<LearningTask>('/tasks/today').catch((reason) => {
+        if (reason instanceof ApiError && reason.status === 404) return null
+        throw reason
+      })
+      const [today, radarItems, skills, repos, reviews, setupStatus, notificationPrefs] = await Promise.all([
+        taskRequest,
+        api<RadarItem[]>('/radar'),
+        api<SkillProfile[]>('/profile'),
+        api<Repository[]>('/repositories'),
+        api<WeeklyReview[]>('/weekly-reviews'),
+        api<SetupStatus>('/setup'),
+        api<NotificationPreference[]>('/notifications/preferences'),
+      ])
+      setTask(today)
+      setRadar(radarItems)
+      setProfile(skills)
+      setRepositories(repos)
+      setWeekly(reviews)
+      setSetup(setupStatus)
+      setPreferences(notificationPrefs)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '无法载入工作台')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load() }, [])
+
+  async function logout() {
+    await api('/auth/logout', { method: 'POST' }).catch(() => undefined)
+    sessionStorage.removeItem('tg_csrf')
+    onLogout()
+  }
+
+  const content = useMemo(() => {
+    if (loading) return <div className="loading-state"><LoaderCircle className="spin" /><span>正在载入</span></div>
+    if (error) return <div className="error-state"><XCircle /><p>{error}</p><button onClick={load}><RefreshCw size={16} />重试</button></div>
+    if (view === 'today') return <TodayView task={task} radar={radar} onTask={setTask} onProfile={setProfile} />
+    if (view === 'radar') return <RadarView items={radar} />
+    if (view === 'repositories') return <RepositoryView items={repositories} />
+    if (view === 'growth') return <GrowthView skills={profile} />
+    if (view === 'weekly') return <WeeklyView items={weekly} onReload={load} />
+    return <SettingsView setup={setup} preferences={preferences} onSaved={load} />
+  }, [error, loading, preferences, profile, radar, repositories, setup, task, view, weekly])
+
+  return (
+    <div className={`app-shell ${chatOpen ? 'chat-visible' : ''}`}>
+      <header className="topbar">
+        <button className="icon-button mobile-menu" title="打开导航" onClick={() => setMobileNavOpen(!mobileNavOpen)}><Menu size={19} /></button>
+        <div className="product-lockup"><span className="product-symbol"><Code2 size={18} /></span><strong>TechGrowth</strong><span>技术成长智能体</span></div>
+        <div className="topbar-actions">
+          <span className={`status-dot ${setup?.provider.api_key_configured ? 'online' : 'warning'}`}>{setup?.provider.api_key_configured ? '模型已连接' : '待配置模型'}</span>
+          <button className="icon-button" title="打开导师" onClick={() => setChatOpen(true)}><Bot size={19} /></button>
+          <button className="icon-button" title="退出登录" onClick={logout}><LogOut size={18} /></button>
+        </div>
+      </header>
+      <nav className={`sidebar ${mobileNavOpen ? 'is-open' : ''}`} aria-label="主导航">
+        <div className="sidebar-user"><span>{user.email.slice(0, 1).toUpperCase()}</span><div><strong>{user.email}</strong><small>个人工作区</small></div></div>
+        {navItems.map((item) => {
+          const Icon = item.icon
+          return <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => { setView(item.id); setMobileNavOpen(false) }} aria-label={item.label}><Icon size={18} /><span>{item.label}</span><ChevronRight size={15} className="nav-arrow" /></button>
+        })}
+        {setup?.icp_number && <a className="icp-link" href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">{setup.icp_number}</a>}
+      </nav>
+      <main className="workspace">{content}</main>
+      <ChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} context={task ? { task_id: task.id, topic: task.topic } : { view }} />
+      <nav className="mobile-bottom-nav" aria-label="移动导航">
+        {navItems.slice(0, 5).map((item) => { const Icon = item.icon; return <button key={item.id} className={view === item.id ? 'active' : ''} aria-label={item.label} onClick={() => setView(item.id)}><Icon size={19} /><span>{item.label.replace('技术', '').replace('项目与', '')}</span></button> })}
+      </nav>
+    </div>
+  )
+}
+
+function SectionHeader({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
+  return <header className="section-header"><div><p>{eyebrow}</p><h1>{title}</h1></div>{action}</header>
+}
+
+function TodayView({ task, radar, onTask, onProfile }: { task: LearningTask | null; radar: RadarItem[]; onTask: (task: LearningTask) => void; onProfile: (profile: SkillProfile[]) => void }) {
+  const [summary, setSummary] = useState('')
+  const [reference, setReference] = useState('')
+  const [scores, setScores] = useState<Record<string, number>>({ correctness: 3, testing: 3 })
+  const [result, setResult] = useState<{ passed: boolean; feedback: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function generate() {
+    setBusy(true)
+    const created = await api<LearningTask>('/tasks/generate', { method: 'POST', body: JSON.stringify({ topic: 'Agent 可靠性', skill: 'AI Agent engineering' }) })
+    onTask(created)
+    setBusy(false)
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (!task) return
+    setBusy(true)
+    try {
+      const response = await api<{ review: { passed: boolean; feedback: string } }>(`/tasks/${task.id}/submissions`, {
+        method: 'POST',
+        body: JSON.stringify({ summary, artifact_kind: 'commit', artifact_reference: reference, self_scores: scores }),
+      })
+      setResult(response.review)
+      onProfile(await api<SkillProfile[]>('/profile'))
+    } finally { setBusy(false) }
+  }
+
+  if (!task) return <section><SectionHeader eyebrow="今天" title="准备第一项成长任务" /><div className="empty-work"><Target size={28} /><p>从一个可验证的 AI Agent 实验开始。</p><button className="primary-button compact" onClick={generate} disabled={busy}><Sparkles size={17} />生成今日任务</button></div></section>
+
+  return (
+    <section>
+      <SectionHeader eyebrow="今日成长任务" title={task.title} action={<span className="time-badge">{task.expected_minutes} 分钟</span>} />
+      <div className="task-layout">
+        <div className="task-main">
+          <p className="task-objective">{task.objective}</p>
+          <div className="content-section"><h2>执行步骤</h2><ol>{task.instructions.map((item) => <li key={item}>{item}</li>)}</ol></div>
+          <div className="content-section"><h2>验收 Rubric</h2><div className="rubric-list">{task.rubric.map((item) => <div key={item.key}><FileCheck2 size={17} /><span>{item.label}</span>{item.critical && <small>关键项</small>}<select aria-label={`${item.label}评分`} value={scores[item.key] ?? 3} onChange={(e) => setScores({ ...scores, [item.key]: Number(e.target.value) })}>{[0,1,2,3,4].map((score) => <option value={score} key={score}>{score} / 4</option>)}</select></div>)}</div></div>
+          <form className="submission-form" onSubmit={submit}><h2>提交成果</h2><label htmlFor="summary">成果摘要</label><textarea id="summary" value={summary} onChange={(e) => setSummary(e.target.value)} required minLength={5} /><label htmlFor="reference">Commit / PR / 报告引用</label><input id="reference" value={reference} onChange={(e) => setReference(e.target.value)} required /><button className="primary-button compact" disabled={busy}><CheckCircle2 size={17} />提交审阅</button></form>
+          {result && <div className={`review-result ${result.passed ? 'passed' : 'retry'}`}><strong>{result.passed ? '审阅通过' : '需要补做'}</strong><p>{result.feedback}</p></div>}
+        </div>
+        <aside className="context-rail"><h2>相关技术信号</h2>{radar.slice(0,3).map((item) => <a href={item.source_url} target="_blank" rel="noreferrer" key={item.id}><span>{item.source_name}</span><strong>{item.title}</strong><small>{item.relevance_reason}</small></a>)}</aside>
+      </div>
+    </section>
+  )
+}
+
+function RadarView({ items }: { items: RadarItem[] }) {
+  const [topic, setTopic] = useState('全部')
+  const topics = ['全部', ...new Set(items.map((item) => item.topic))]
+  const filtered = topic === '全部' ? items : items.filter((item) => item.topic === topic)
+  return <section><SectionHeader eyebrow="技术雷达" title="值得关注的技术变化" /><div className="filter-row">{topics.map((item) => <button className={topic === item ? 'active' : ''} key={item} onClick={() => setTopic(item)}>{item}</button>)}</div><div className="radar-list">{filtered.map((item) => <article key={item.id}><div className="radar-meta"><span>{item.source_name}</span><span>可信度 {Math.round(item.credibility * 100)}%</span><span>相关度 {Math.round(item.relevance * 100)}%</span></div><h2>{item.title}</h2><p>{item.summary}</p><footer><small>{item.relevance_reason}</small><a href={item.source_url} target="_blank" rel="noreferrer" title="打开来源"><ExternalLink size={16} /></a></footer></article>)}</div></section>
+}
+
+function RepositoryView({ items }: { items: Repository[] }) {
+  const [pairing, setPairing] = useState<{ code: string; expires_at: string } | null>(null)
+  async function createPairing() { setPairing(await api('/connectors/pairing-codes', { method: 'POST' })) }
+  return <section><SectionHeader eyebrow="代码证据" title="项目与仓库" action={<button className="secondary-button" onClick={createPairing}><ShieldCheck size={17} />配对连接器</button>} />{pairing && <div className="pairing-band"><span>配对码</span><strong>{pairing.code}</strong><small>10 分钟内有效</small></div>}<div className="repository-table"><div className="table-head"><span>仓库</span><span>主要语言</span><span>最近提交</span><span>同步状态</span></div>{items.map((item) => <div className="table-row" key={item.id}><strong>{item.name}</strong><span>{Object.entries(item.languages).slice(0,2).map(([name,value]) => `${name} ${value}%`).join(' · ') || '未识别'}</span><code>{item.last_commit.slice(0,8) || '—'}</code><span className="sync-state">{item.last_synced_at ? '已同步' : '等待同步'}</span></div>)}</div>{items.length === 0 && <p className="empty-note centered">还没有已同步仓库。</p>}</section>
+}
+
+const levelLabels = { discovering: '入门', practicing: '练习中', applied: '已应用', proficient: '熟练' }
+function GrowthView({ skills }: { skills: SkillProfile[] }) {
+  return <section><SectionHeader eyebrow="成长证据" title="能力画像" /><div className="skill-list">{skills.map((skill) => <article key={skill.id}><div><strong>{skill.name}</strong><span className={`level ${skill.level}`}>{levelLabels[skill.level]}</span></div><div className="evidence-count"><FileCheck2 size={17} /><span>{skill.evidence_count} 条有效证据</span></div></article>)}</div>{skills.length === 0 && <p className="empty-note centered">通过第一项任务后，这里会出现能力证据。</p>}</section>
+}
+
+function WeeklyView({ items, onReload }: { items: WeeklyReview[]; onReload: () => Promise<void> }) {
+  async function generate() { await api('/weekly-reviews/generate', { method: 'POST' }); await onReload() }
+  return <section><SectionHeader eyebrow="周期复盘" title="周复盘" action={<button className="secondary-button" onClick={generate}><RefreshCw size={17} />生成复盘</button>} /><div className="weekly-list">{items.map((item) => <article key={item.id}><time>{new Date(item.created_at).toLocaleDateString('zh-CN')}</time><h2>{item.summary}</h2><div><strong>下一阶段</strong>{item.next_focus.map((focus) => <span key={focus}>{focus}</span>)}</div></article>)}</div></section>
+}
+
+function SettingsView({ setup, preferences, onSaved }: { setup: SetupStatus | null; preferences: NotificationPreference[]; onSaved: () => Promise<void> }) {
+  const [form, setForm] = useState({ base_url: setup?.provider.base_url || '', chat_model: setup?.provider.chat_model || '', embedding_model: setup?.provider.embedding_model || '', api_key: '' })
+  const [prefs, setPrefs] = useState<NotificationPreference[]>(preferences.length ? preferences : [
+    { channel: 'email', event: 'daily_task', enabled: true }, { channel: 'web_push', event: 'daily_task', enabled: true },
+    { channel: 'email', event: 'review_complete', enabled: true }, { channel: 'web_push', event: 'review_complete', enabled: true },
+    { channel: 'email', event: 'weekly_review', enabled: true }, { channel: 'web_push', event: 'weekly_review', enabled: true },
+  ])
+  async function saveProvider(event: FormEvent) { event.preventDefault(); await api('/setup/provider', { method: 'PUT', body: JSON.stringify(form) }); await onSaved() }
+  async function savePrefs() { await api('/notifications/preferences', { method: 'PUT', body: JSON.stringify({ preferences: prefs }) }); await onSaved() }
+  async function enablePush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !setup?.vapid_public_key) return
+    const registration = await navigator.serviceWorker.register('/sw.js')
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidPublicKey(setup.vapid_public_key) })
+    await api('/notifications/push-subscriptions', { method: 'POST', body: JSON.stringify(subscription.toJSON()) })
+  }
+  return <section><SectionHeader eyebrow="系统设置" title="连接与通知" /><div className="settings-sections"><form onSubmit={saveProvider}><h2>模型供应商</h2><div className="field-grid"><label>Base URL<input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} type="url" required /></label><label>聊天模型<input value={form.chat_model} onChange={(e) => setForm({ ...form, chat_model: e.target.value })} required /></label><label>Embedding 模型<input value={form.embedding_model} onChange={(e) => setForm({ ...form, embedding_model: e.target.value })} required /></label><label>API Key<input value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} type="password" required={!setup?.provider.api_key_configured} placeholder={setup?.provider.api_key_configured ? '已配置，留空则保持不变' : ''} /></label></div><button className="primary-button compact"><Save size={17} />保存模型设置</button></form><div><h2>通知偏好</h2><div className="preference-list">{prefs.map((pref, index) => <label key={`${pref.channel}-${pref.event}`}><span><Bell size={16} />{pref.event === 'daily_task' ? '每日任务' : pref.event === 'review_complete' ? '审阅完成' : '周复盘'} · {pref.channel === 'email' ? '邮件' : 'Web Push'}</span><input type="checkbox" checked={pref.enabled} onChange={(e) => setPrefs(prefs.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: e.target.checked } : item))} /></label>)}</div><div className="button-row"><button className="secondary-button" onClick={savePrefs}><Save size={17} />保存通知</button><button className="secondary-button" onClick={enablePush}><Bell size={17} />启用浏览器推送</button></div></div></div></section>
+}

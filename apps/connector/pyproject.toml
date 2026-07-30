@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "techgrowth-connector"
+version = "0.1.0"
+description = "Windows tray connector for TechGrowth"
+requires-python = ">=3.12"
+dependencies = [
+  "cryptography>=44,<46",
+  "httpx>=0.28,<1",
+  "keyring>=25,<26",
+  "packaging>=24,<27",
+  "pathspec>=0.12,<1",
+  "PySide6>=6.8,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pyinstaller>=6.11,<7",
+  "pytest>=8.3,<9",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+techgrowth-connector = "techgrowth_connector.tray:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/techgrowth_connector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

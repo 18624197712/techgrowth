@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: techgrowth_test
+          POSTGRES_USER: techgrowth
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U techgrowth -d techgrowth_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/pyproject.toml
+      - run: python -m pip install -e "services/api[dev]"
+      - run: python -m ruff check services/api
+      - run: python -m pytest
+        working-directory: services/api
+      - name: Validate PostgreSQL migration
+        working-directory: services/api
+        env:
+          TG_DATABASE_URL: postgresql+psycopg://techgrowth:test-password@127.0.0.1:5432/techgrowth_test
+        run: alembic upgrade head
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir apps/web lint
+      - run: pnpm --dir apps/web test
+      - run: pnpm --dir apps/web build
+
+  connector:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/connector/pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+        working-directory: apps/connector
+      - run: python -m ruff check .
+        working-directory: apps/connector
+      - name: Test connector
+        working-directory: apps/connector
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest
+      - name: Build portable connector
+        working-directory: apps/connector
+        run: python -m PyInstaller --clean --noconfirm --distpath release --workpath build connector.spec
+      - name: Create checksum
+        shell: pwsh
+        working-directory: apps/connector/release
+        run: |
+          $hash = (Get-FileHash TechGrowthConnector.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TechGrowthConnector.exe" | Set-Content -Encoding ascii SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TechGrowthConnector-windows-x64
+          path: |
+            apps/connector/release/TechGrowthConnector.exe
+            apps/connector/release/SHA256SUMS.txt
+

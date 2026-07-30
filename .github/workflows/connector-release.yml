@@ -1,0 +1,41 @@
+name: Connector Release
+
+on:
+  push:
+    tags:
+      - "connector-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/connector/pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+        working-directory: apps/connector
+      - run: python -m pytest
+        working-directory: apps/connector
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - run: python -m PyInstaller --clean --noconfirm --distpath release --workpath build connector.spec
+        working-directory: apps/connector
+      - name: Create checksum
+        shell: pwsh
+        working-directory: apps/connector/release
+        run: |
+          $hash = (Get-FileHash TechGrowthConnector.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TechGrowthConnector.exe" | Set-Content -Encoding ascii SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            apps/connector/release/TechGrowthConnector.exe
+            apps/connector/release/SHA256SUMS.txt
+

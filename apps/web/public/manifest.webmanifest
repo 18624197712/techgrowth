@@ -1,0 +1,10 @@
+{
+  "name": "TechGrowth 技术成长智能体",
+  "short_name": "TechGrowth",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f5",
+  "theme_color": "#f4f6f5",
+  "lang": "zh-CN"
+}
+
