@@ -34,8 +34,13 @@ class RadarService:
                 items = [item]
             return items
 
-    def upsert(self, candidates: list[IngestCandidate]) -> int:
+    def upsert(
+        self,
+        candidates: list[IngestCandidate],
+        embeddings: dict[str, list[float]] | None = None,
+    ) -> int:
         inserted = 0
+        vectors = embeddings or {}
         with self.session_factory() as db:
             for candidate in candidates:
                 existing = db.scalar(
@@ -45,7 +50,21 @@ class RadarService:
                 )
                 if existing:
                     continue
-                db.add(RadarItemRecord(**asdict(candidate)))
+                db.add(
+                    RadarItemRecord(
+                        **asdict(candidate), embedding=vectors.get(candidate.source_key)
+                    )
+                )
                 inserted += 1
             db.commit()
         return inserted
+
+    def ids_for_source_keys(self, source_keys: list[str]) -> list[str]:
+        if not source_keys:
+            return []
+        with self.session_factory() as db:
+            return list(
+                db.scalars(
+                    select(RadarItemRecord.id).where(RadarItemRecord.source_key.in_(source_keys))
+                ).all()
+            )

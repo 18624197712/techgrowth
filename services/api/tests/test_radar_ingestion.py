@@ -26,3 +26,12 @@ def test_radar_upsert_is_idempotent(client) -> None:
 
     assert service.upsert([candidate]) == 1
     assert service.upsert([candidate]) == 0
+
+
+def test_radar_upsert_persists_embedding(client) -> None:
+    service: RadarService = client.app.state.services.radar
+    candidate = FeedSource("embedded", "Official AI", "Agent engineering").parse(RSS)[0]
+
+    assert service.upsert([candidate], {candidate.source_key: [0.1, 0.2]}) == 1
+    item = next(item for item in service.list_items() if item.source_key == candidate.source_key)
+    assert item.embedding == [0.1, 0.2]

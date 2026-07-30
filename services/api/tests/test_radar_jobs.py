@@ -1,0 +1,77 @@
+from datetime import UTC, datetime
+
+import pytest
+
+from techgrowth_api.integrations.radar_collector import RadarSourceResult
+from techgrowth_api.integrations.radar_sources import IngestCandidate
+
+
+def candidate(source_key: str = "official:item-1") -> IngestCandidate:
+    return IngestCandidate(
+        source_key=source_key,
+        title="Agent Runtime 2.0",
+        summary="Durable agent execution with explicit state boundaries.",
+        source_url="https://example.com/agent-runtime",
+        source_name="Official AI",
+        topic="Agent engineering",
+        published_at=datetime.now(UTC),
+        credibility=0.95,
+    )
+
+
+class FakeCollector:
+    def __init__(self, results: list[RadarSourceResult]) -> None:
+        self.results = results
+        self.calls = 0
+
+    async def collect(self) -> list[RadarSourceResult]:
+        self.calls += 1
+        return self.results
+
+
+@pytest.mark.asyncio
+async def test_radar_job_records_partial_source_failure(client) -> None:
+    job = client.app.state.services.radar_jobs
+    job.collector = FakeCollector(
+        [
+            RadarSourceResult("official", [candidate()], ""),
+            RadarSourceResult("broken", [], "HTTP 503"),
+        ]
+    )
+
+    result = await job.run()
+
+    assert result["status"] == "partial"
+    assert result["successful_sources"] == 1
+    assert result["failed_sources"] == ["broken"]
+    assert result["inserted_items"] == 1
+    assert "https://" not in str(result)
+    assert client.app.state.services.radar_jobs.status()["status"] == "partial"
+
+
+@pytest.mark.asyncio
+async def test_automatic_radar_job_is_idempotent_for_the_day(client) -> None:
+    collector = FakeCollector([RadarSourceResult("official", [candidate()], "")])
+    job = client.app.state.services.radar_jobs
+    job.collector = collector
+
+    first = await job.run()
+    second = await job.run()
+
+    assert first["id"] == second["id"]
+    assert collector.calls == 1
+
+
+def test_authenticated_manual_radar_refresh_returns_run_status(authenticated_client) -> None:
+    client, csrf = authenticated_client
+    client.app.state.services.radar_jobs.collector = FakeCollector(
+        [RadarSourceResult("official", [candidate("official:manual")], "")]
+    )
+
+    response = client.post("/api/v1/radar/refresh", headers={"X-CSRF-Token": csrf})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "succeeded"
+    status = client.get("/api/v1/radar/status")
+    assert status.status_code == 200
+    assert status.json()["inserted_items"] == 1

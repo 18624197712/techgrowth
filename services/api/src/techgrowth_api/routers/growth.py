@@ -98,6 +98,16 @@ def radar(request: Request, _: User = Depends(current_user)) -> list[dict]:
     ]
 
 
+@router.get("/radar/status")
+def radar_status(request: Request, _: User = Depends(current_user)) -> dict:
+    return request.app.state.services.radar_jobs.status()
+
+
+@router.post("/radar/refresh")
+async def refresh_radar(request: Request, _: User = Depends(csrf_user)) -> dict:
+    return await request.app.state.services.radar_jobs.run(force=True)
+
+
 @router.get("/tasks/today")
 def today_task(request: Request, _: User = Depends(current_user)) -> dict:
     with request.app.state.database.session_factory() as db:

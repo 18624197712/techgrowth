@@ -9,6 +9,7 @@ from .daily_tasks import DailyTaskService
 from .growth import GrowthService
 from .notifications import NotificationService
 from .radar import RadarService
+from .radar_jobs import RadarJobService
 from .settings import SettingsService
 from .weekly import WeeklyService
 
@@ -24,6 +25,7 @@ class ServiceContainer:
     settings: SettingsService
     artifacts: TempArtifactStore
     daily_tasks: DailyTaskService
+    radar_jobs: RadarJobService
 
     @classmethod
     def build(cls, database: Database, settings: Settings) -> "ServiceContainer":
@@ -33,6 +35,7 @@ class ServiceContainer:
         radar = RadarService(factory)
         provider_settings = SettingsService(factory, auth.cipher)
         daily_tasks = DailyTaskService(settings, growth, radar, provider_settings)
+        radar_jobs = RadarJobService(factory, settings, radar, provider_settings)
         return cls(
             auth=auth,
             growth=growth,
@@ -43,4 +46,5 @@ class ServiceContainer:
             settings=provider_settings,
             artifacts=TempArtifactStore(settings.temp_upload_dir, auth.cipher),
             daily_tasks=daily_tasks,
+            radar_jobs=radar_jobs,
         )

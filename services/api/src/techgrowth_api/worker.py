@@ -6,19 +6,24 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from .config import Settings, get_settings
 from .db import Database
-from .integrations.radar_collector import RadarCollector
 from .services.container import ServiceContainer
 
 
 def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.timezone)
-    collector = RadarCollector()
+    radar_task: asyncio.Task | None = None
 
     async def collect_radar() -> None:
-        candidates = await collector.collect()
-        services.radar.upsert(candidates)
+        nonlocal radar_task
+        radar_task = asyncio.create_task(services.radar_jobs.run())
+        await radar_task
 
     async def daily_task() -> None:
+        if radar_task is not None and not radar_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(radar_task), timeout=120)
+            except TimeoutError:
+                pass
         if services.growth.has_task_today():
             return
         await services.daily_tasks.generate()
@@ -43,7 +48,7 @@ def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOSc
 
     scheduler.add_job(
         collect_radar,
-        IntervalTrigger(hours=6),
+        CronTrigger(hour=8, minute=0, timezone=settings.timezone),
         id="collect-radar",
         replace_existing=True,
         coalesce=True,
@@ -51,7 +56,7 @@ def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOSc
     )
     scheduler.add_job(
         daily_task,
-        CronTrigger(hour=8, minute=0, timezone=settings.timezone),
+        CronTrigger(hour=8, minute=10, timezone=settings.timezone),
         id="daily-task",
         replace_existing=True,
         coalesce=True,
