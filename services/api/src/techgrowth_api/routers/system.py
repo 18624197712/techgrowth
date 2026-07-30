@@ -78,9 +78,12 @@ def chat_stream(
     payload: ChatRequest, request: Request, _: User = Depends(csrf_user)
 ) -> StreamingResponse:
     async def events():
+        chat_configured = request.app.state.services.settings.provider_status()["chat"][
+            "api_key_configured"
+        ]
         message = (
             "先对照当前任务的 rubric 找到最低分项，再补一条可验证证据。"
-            if not request.app.state.services.settings.provider_status()["api_key_configured"]
+            if not chat_configured
             else "我已收到问题。请基于当前任务证据继续分析。"
         )
         yield f"event: token\ndata: {json.dumps({'text': message}, ensure_ascii=False)}\n\n"
