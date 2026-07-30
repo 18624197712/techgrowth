@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from ..dependencies import csrf_user, current_user
 from ..models import NotificationPreferenceRecord, User
 from ..schemas import NotificationPreferencesRequest
-from ..services.settings import ProviderSettings
+from ..services.settings import ProviderSettings, ProviderSettingsValidationError
 
 router = APIRouter(tags=["settings"])
 
@@ -25,7 +25,10 @@ def setup_status(request: Request, _: User = Depends(current_user)) -> dict:
 def save_provider(
     payload: ProviderSettings, request: Request, _: User = Depends(csrf_user)
 ) -> dict:
-    request.app.state.services.settings.save_provider(payload)
+    try:
+        request.app.state.services.settings.save_provider(payload)
+    except ProviderSettingsValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return request.app.state.services.settings.provider_status()
 
 
