@@ -60,12 +60,16 @@ export type WeeklyReview = {
   created_at: string
 }
 
+export type ProviderEndpointStatus = {
+  base_url: string
+  model: string
+  api_key_configured: boolean
+}
+
 export type SetupStatus = {
   provider: {
-    base_url?: string
-    chat_model?: string
-    embedding_model?: string
-    api_key_configured: boolean
+    chat: ProviderEndpointStatus
+    embedding: ProviderEndpointStatus
   }
   domain: string
   icp_number: string

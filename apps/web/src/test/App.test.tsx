@@ -22,11 +22,15 @@ const task = {
   created_at: '2026-07-30T08:00:00Z',
 }
 
-function mockFetch(authenticated: boolean) {
+function mockFetch(
+  authenticated: boolean,
+  onRequest?: (url: string, init?: RequestInit) => void,
+) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
+      onRequest?.(url, init)
       if (url.endsWith('/auth/me')) {
         return new Response(
           authenticated ? JSON.stringify({ id: 'u1', email: 'dev@example.com' }) : '',
@@ -53,7 +57,21 @@ function mockFetch(authenticated: boolean) {
       if (url.endsWith('/repositories')) return Response.json([])
       if (url.endsWith('/weekly-reviews')) return Response.json([])
       if (url.endsWith('/setup'))
-        return Response.json({ provider: { api_key_configured: false }, icp_number: '' })
+        return Response.json({
+          provider: {
+            chat: {
+              base_url: 'https://chat.example/v1',
+              model: 'chat-model',
+              api_key_configured: true,
+            },
+            embedding: {
+              base_url: 'https://embed.example/v1',
+              model: 'embed-model',
+              api_key_configured: false,
+            },
+          },
+          icp_number: '',
+        })
       if (url.endsWith('/notifications/preferences')) return Response.json([])
       return Response.json({})
     }),
@@ -84,6 +102,45 @@ describe('TechGrowth app', () => {
     expect(screen.getByText('实现正确性')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '技术雷达' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '成长证据' })).toBeInTheDocument()
+  })
+
+  it('configures chat and embedding providers independently', async () => {
+    let providerBody: unknown
+    mockFetch(true, (url, init) => {
+      if (url.endsWith('/setup/provider') && init?.method === 'PUT') {
+        providerBody = JSON.parse(String(init.body))
+      }
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByRole('heading', { name: task.title })
+    const settingsButton = document.querySelector('.sidebar .lucide-settings')?.closest('button')
+    expect(settingsButton).not.toBeNull()
+    await user.click(settingsButton!)
+
+    expect(screen.getByRole('heading', { name: '聊天模型服务' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Embedding 模型服务' })).toBeInTheDocument()
+    expect(screen.getByLabelText('聊天 Base URL')).toHaveValue('https://chat.example/v1')
+    expect(screen.getByLabelText('Embedding Base URL')).toHaveValue(
+      'https://embed.example/v1',
+    )
+
+    await user.type(screen.getByLabelText('Embedding API Key'), 'embed-secret')
+    await user.click(screen.getByRole('button', { name: '保存模型设置' }))
+
+    expect(providerBody).toEqual({
+      chat: {
+        base_url: 'https://chat.example/v1',
+        model: 'chat-model',
+        api_key: '',
+      },
+      embedding: {
+        base_url: 'https://embed.example/v1',
+        model: 'embed-model',
+        api_key: 'embed-secret',
+      },
+    })
   })
 
   it('renders FastAPI validation details as readable text', async () => {

@@ -634,19 +634,25 @@ export interface components {
             /** Public Key */
             public_key: string;
         };
-        /** ProviderSettings */
-        ProviderSettings: {
+        /** ProviderEndpointSettings */
+        ProviderEndpointSettings: {
             /**
              * Base Url
              * Format: uri
              */
             base_url: string;
-            /** Chat Model */
-            chat_model: string;
-            /** Embedding Model */
-            embedding_model: string;
-            /** Api Key */
+            /** Model */
+            model: string;
+            /**
+             * Api Key
+             * @default
+             */
             api_key: string;
+        };
+        /** ProviderSettings */
+        ProviderSettings: {
+            chat: components["schemas"]["ProviderEndpointSettings"];
+            embedding: components["schemas"]["ProviderEndpointSettings"];
         };
         /** PushSubscriptionRequest */
         PushSubscriptionRequest: {

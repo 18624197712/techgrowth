@@ -87,6 +87,13 @@ export function Workbench({ user, onLogout }: { user: User; onLogout: () => void
     if (view === 'weekly') return <WeeklyView items={weekly} onReload={load} />
     return <SettingsView setup={setup} preferences={preferences} onSaved={load} />
   }, [error, loading, preferences, profile, radar, repositories, setup, task, view, weekly])
+  const chatConfigured = setup?.provider.chat.api_key_configured ?? false
+  const embeddingConfigured = setup?.provider.embedding.api_key_configured ?? false
+  const providerStatus = chatConfigured && embeddingConfigured
+    ? '模型已连接'
+    : chatConfigured || embeddingConfigured
+      ? '模型部分配置'
+      : '待配置模型'
 
   return (
     <div className={`app-shell ${chatOpen ? 'chat-visible' : ''}`}>
@@ -94,7 +101,7 @@ export function Workbench({ user, onLogout }: { user: User; onLogout: () => void
         <button className="icon-button mobile-menu" title="打开导航" onClick={() => setMobileNavOpen(!mobileNavOpen)}><Menu size={19} /></button>
         <div className="product-lockup"><span className="product-symbol"><Code2 size={18} /></span><strong>TechGrowth</strong><span>技术成长智能体</span></div>
         <div className="topbar-actions">
-          <span className={`status-dot ${setup?.provider.api_key_configured ? 'online' : 'warning'}`}>{setup?.provider.api_key_configured ? '模型已连接' : '待配置模型'}</span>
+          <span className={`status-dot ${chatConfigured && embeddingConfigured ? 'online' : 'warning'}`}>{providerStatus}</span>
           <button className="icon-button" title="打开导师" onClick={() => setChatOpen(true)}><Bot size={19} /></button>
           <button className="icon-button" title="退出登录" onClick={logout}><LogOut size={18} /></button>
         </div>
@@ -191,7 +198,18 @@ function WeeklyView({ items, onReload }: { items: WeeklyReview[]; onReload: () =
 }
 
 function SettingsView({ setup, preferences, onSaved }: { setup: SetupStatus | null; preferences: NotificationPreference[]; onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState({ base_url: setup?.provider.base_url || '', chat_model: setup?.provider.chat_model || '', embedding_model: setup?.provider.embedding_model || '', api_key: '' })
+  const [form, setForm] = useState({
+    chat: {
+      base_url: setup?.provider.chat.base_url || '',
+      model: setup?.provider.chat.model || '',
+      api_key: '',
+    },
+    embedding: {
+      base_url: setup?.provider.embedding.base_url || '',
+      model: setup?.provider.embedding.model || '',
+      api_key: '',
+    },
+  })
   const [prefs, setPrefs] = useState<NotificationPreference[]>(preferences.length ? preferences : [
     { channel: 'email', event: 'daily_task', enabled: true }, { channel: 'web_push', event: 'daily_task', enabled: true },
     { channel: 'email', event: 'review_complete', enabled: true }, { channel: 'web_push', event: 'review_complete', enabled: true },
@@ -205,5 +223,5 @@ function SettingsView({ setup, preferences, onSaved }: { setup: SetupStatus | nu
     const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapidPublicKey(setup.vapid_public_key) })
     await api('/notifications/push-subscriptions', { method: 'POST', body: JSON.stringify(subscription.toJSON()) })
   }
-  return <section><SectionHeader eyebrow="系统设置" title="连接与通知" /><div className="settings-sections"><form onSubmit={saveProvider}><h2>模型供应商</h2><div className="field-grid"><label>Base URL<input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} type="url" required /></label><label>聊天模型<input value={form.chat_model} onChange={(e) => setForm({ ...form, chat_model: e.target.value })} required /></label><label>Embedding 模型<input value={form.embedding_model} onChange={(e) => setForm({ ...form, embedding_model: e.target.value })} required /></label><label>API Key<input value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} type="password" required={!setup?.provider.api_key_configured} placeholder={setup?.provider.api_key_configured ? '已配置，留空则保持不变' : ''} /></label></div><button className="primary-button compact"><Save size={17} />保存模型设置</button></form><div><h2>通知偏好</h2><div className="preference-list">{prefs.map((pref, index) => <label key={`${pref.channel}-${pref.event}`}><span><Bell size={16} />{pref.event === 'daily_task' ? '每日任务' : pref.event === 'review_complete' ? '审阅完成' : '周复盘'} · {pref.channel === 'email' ? '邮件' : 'Web Push'}</span><input type="checkbox" checked={pref.enabled} onChange={(e) => setPrefs(prefs.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: e.target.checked } : item))} /></label>)}</div><div className="button-row"><button className="secondary-button" onClick={savePrefs}><Save size={17} />保存通知</button><button className="secondary-button" onClick={enablePush}><Bell size={17} />启用浏览器推送</button></div></div></div></section>
+  return <section><SectionHeader eyebrow="系统设置" title="连接与通知" /><div className="settings-sections"><form onSubmit={saveProvider}><h2>聊天模型服务</h2><div className="field-grid"><label>聊天 Base URL<input value={form.chat.base_url} onChange={(e) => setForm({ ...form, chat: { ...form.chat, base_url: e.target.value } })} type="url" required /></label><label>聊天模型<input value={form.chat.model} onChange={(e) => setForm({ ...form, chat: { ...form.chat, model: e.target.value } })} required /></label><label>聊天 API Key<input value={form.chat.api_key} onChange={(e) => setForm({ ...form, chat: { ...form.chat, api_key: e.target.value } })} type="password" required={!setup?.provider.chat.api_key_configured} placeholder={setup?.provider.chat.api_key_configured ? '已配置，留空则保持不变' : ''} /></label></div><h2>Embedding 模型服务</h2><div className="field-grid"><label>Embedding Base URL<input value={form.embedding.base_url} onChange={(e) => setForm({ ...form, embedding: { ...form.embedding, base_url: e.target.value } })} type="url" required /></label><label>Embedding 模型<input value={form.embedding.model} onChange={(e) => setForm({ ...form, embedding: { ...form.embedding, model: e.target.value } })} required /></label><label>Embedding API Key<input value={form.embedding.api_key} onChange={(e) => setForm({ ...form, embedding: { ...form.embedding, api_key: e.target.value } })} type="password" required={!setup?.provider.embedding.api_key_configured} placeholder={setup?.provider.embedding.api_key_configured ? '已配置，留空则保持不变' : ''} /></label></div><button className="primary-button compact"><Save size={17} />保存模型设置</button></form><div><h2>通知偏好</h2><div className="preference-list">{prefs.map((pref, index) => <label key={`${pref.channel}-${pref.event}`}><span><Bell size={16} />{pref.event === 'daily_task' ? '每日任务' : pref.event === 'review_complete' ? '审阅完成' : '周复盘'} · {pref.channel === 'email' ? '邮件' : 'Web Push'}</span><input type="checkbox" checked={pref.enabled} onChange={(e) => setPrefs(prefs.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: e.target.checked } : item))} /></label>)}</div><div className="button-row"><button className="secondary-button" onClick={savePrefs}><Save size={17} />保存通知</button><button className="secondary-button" onClick={enablePush}><Bell size={17} />启用浏览器推送</button></div></div></div></section>
 }
