@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from ..domain.curriculum import CURRICULUM, CurriculumSelector
 from ..domain.growth import Evidence, EvidencePolicy, RubricScore
 from ..domain.tasks import TaskDraft, TaskPolicy
 from ..models import (
@@ -53,12 +54,40 @@ class GrowthService:
             return task
 
     def has_task_today(self) -> bool:
+        return self.today_task() is not None
+
+    def today_task(self) -> LearningTaskRecord | None:
         now = datetime.now(UTC)
         with self.session_factory() as db:
             latest = db.scalar(
                 select(LearningTaskRecord).order_by(LearningTaskRecord.created_at.desc()).limit(1)
             )
-            return bool(latest and self._aware(latest.created_at).date() == now.date())
+            if latest and self._aware(latest.created_at).date() == now.date():
+                db.expunge(latest)
+                return latest
+            return None
+
+    def next_curriculum_node(self):
+        with self.session_factory() as db:
+            tasks = list(
+                db.scalars(
+                    select(LearningTaskRecord).order_by(LearningTaskRecord.created_at.asc())
+                ).all()
+            )
+        curriculum_tasks = [item for item in tasks if item.node_key != "legacy"]
+        completed = {item.node_key for item in curriculum_tasks if item.status == "passed"}
+        remediation_task = next(
+            (item for item in reversed(curriculum_tasks) if item.status == "remediation"), None
+        )
+        remediation = (
+            CURRICULUM.node(remediation_task.node_key) if remediation_task is not None else None
+        )
+        recent_tracks = [item.track_key for item in curriculum_tasks if not item.is_remediation][
+            -10:
+        ]
+        return CurriculumSelector(CURRICULUM).select(
+            recent_tracks, completed, remediation=remediation
+        )
 
     def recent_topics(self) -> list[tuple[str, datetime]]:
         with self.session_factory() as db:

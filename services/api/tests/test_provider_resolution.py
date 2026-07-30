@@ -1,5 +1,5 @@
 from techgrowth_api.config import Settings
-from techgrowth_api.worker import resolve_provider_settings
+from techgrowth_api.integrations.provider_settings import resolve_provider_settings
 
 
 def test_provider_specific_stored_values_have_highest_precedence() -> None:

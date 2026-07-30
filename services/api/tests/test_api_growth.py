@@ -87,6 +87,9 @@ def test_daily_task_submission_creates_review_and_evidence(authenticated_client)
     task = task_response.json()
     assert 30 <= task["expected_minutes"] <= 45
     assert task["rubric"]
+    assert task["curriculum_version"] == "v1"
+    assert task["deliverables"]
+    assert len(task["acceptance_checks"]) >= 2
 
     submitted = client.post(
         f"/api/v1/tasks/{task['id']}/submissions",
@@ -103,7 +106,7 @@ def test_daily_task_submission_creates_review_and_evidence(authenticated_client)
     assert review["passed"] is True
 
     profile = client.get("/api/v1/profile").json()
-    skill = next(item for item in profile if item["name"] == "RAG evaluation")
+    skill = next(item for item in profile if item["name"] == task["skill_name"])
     assert skill["level"] == "practicing"
     assert skill["evidence_count"] == 1
 

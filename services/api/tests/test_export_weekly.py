@@ -22,4 +22,4 @@ def test_export_and_weekly_review_are_authenticated(authenticated_client) -> Non
     assert weekly.status_code == 201
     assert weekly.json()["evidence_ids"]
     assert exported.status_code == 200
-    assert exported.json()["skills"][0]["name"] == "Agent evaluation"
+    assert exported.json()["skills"][0]["name"] == task["skill_name"]

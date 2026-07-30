@@ -34,13 +34,12 @@ def task_dict(task) -> dict:
 
 
 @router.post("/tasks/generate", status_code=status.HTTP_201_CREATED)
-def generate_task(
+async def generate_task(
     payload: TaskGenerateRequest, request: Request, _: User = Depends(csrf_user)
 ) -> dict:
     try:
-        return task_dict(
-            request.app.state.services.growth.generate_task(payload.topic, payload.skill)
-        )
+        _ = payload
+        return task_dict(await request.app.state.services.daily_tasks.generate())
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 

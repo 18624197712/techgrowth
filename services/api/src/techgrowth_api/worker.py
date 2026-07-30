@@ -8,38 +8,6 @@ from .config import Settings, get_settings
 from .db import Database
 from .integrations.radar_collector import RadarCollector
 from .services.container import ServiceContainer
-from .workflows import AgentWorkflowService
-
-
-def resolve_provider_settings(settings: Settings, stored: dict[str, str]) -> Settings:
-    legacy_base_url = stored.get("base_url", "")
-    legacy_api_key = stored.get("api_key", "")
-    return settings.model_copy(
-        update={
-            "chat_base_url": stored.get("chat.base_url")
-            or legacy_base_url
-            or settings.chat_base_url
-            or settings.openai_base_url,
-            "chat_api_key": stored.get("chat.api_key")
-            or legacy_api_key
-            or settings.chat_api_key
-            or settings.openai_api_key,
-            "chat_model": stored.get("chat.model")
-            or stored.get("chat_model")
-            or settings.chat_model,
-            "embedding_base_url": stored.get("embedding.base_url")
-            or legacy_base_url
-            or settings.embedding_base_url
-            or settings.openai_base_url,
-            "embedding_api_key": stored.get("embedding.api_key")
-            or legacy_api_key
-            or settings.embedding_api_key
-            or settings.openai_api_key,
-            "embedding_model": stored.get("embedding.model")
-            or stored.get("embedding_model")
-            or settings.embedding_model,
-        }
-    )
 
 
 def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOScheduler:
@@ -53,20 +21,7 @@ def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOSc
     async def daily_task() -> None:
         if services.growth.has_task_today():
             return
-        sources = services.radar.list_items()[:5]
-        provider = services.settings.provider_values()
-        workflow_settings = resolve_provider_settings(settings, provider)
-        workflow = AgentWorkflowService(workflow_settings)
-        draft = await workflow.generate_daily_task(
-            skill="AI Agent engineering",
-            topic=sources[0].topic if sources else "Agent engineering",
-            sources=[
-                {"id": item.id, "content": f"{item.title}\n{item.summary}"} for item in sources
-            ]
-            or [{"id": "seed-agent-engineering", "content": "Build a bounded agent workflow"}],
-            recent_topics=services.growth.recent_topics(),
-        )
-        services.growth.save_draft(draft, "AI Agent engineering")
+        await services.daily_tasks.generate()
         await services.notifications.dispatch(
             "daily_task",
             "TechGrowth 今日任务已准备",
