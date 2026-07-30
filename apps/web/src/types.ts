@@ -95,6 +95,7 @@ export type RadarStatus = {
   id: string
   status: 'never' | 'running' | 'succeeded' | 'partial' | 'failed'
   successful_sources: number
+  total_sources: number
   failed_sources: string[]
   inserted_items: number
   embedding_failures: number

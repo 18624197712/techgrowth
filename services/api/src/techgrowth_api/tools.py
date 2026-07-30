@@ -159,6 +159,7 @@ class ToolRegistry:
 
         def write_handler(_args, _context):
             return None
+
         return cls(
             [
                 ToolSpec(

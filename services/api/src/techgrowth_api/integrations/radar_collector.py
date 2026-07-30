@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, replace
+from typing import Literal
 
 import httpx
 
@@ -13,6 +14,8 @@ class RadarFeed:
     topic: str
     urls: tuple[str, ...]
     credibility: float
+    region: Literal["domestic", "international"] = "international"
+    enabled: bool = True
 
 
 DEFAULT_FEEDS = (
@@ -73,6 +76,47 @@ DEFAULT_FEEDS = (
         "Chinese developer ecosystem",
         ("https://www.oschina.net/news/rss",),
         0.75,
+        "domestic",
+    ),
+    RadarFeed(
+        "infoq-cn",
+        "InfoQ 中文",
+        "Software architecture",
+        ("https://www.infoq.cn/feed",),
+        0.85,
+        "domestic",
+    ),
+    RadarFeed(
+        "segmentfault",
+        "SegmentFault",
+        "Chinese developer ecosystem",
+        ("https://segmentfault.com/feeds",),
+        0.75,
+        "domestic",
+    ),
+    RadarFeed(
+        "v2ex-tech",
+        "V2EX 技术",
+        "Developer community",
+        ("https://www.v2ex.com/index.xml",),
+        0.7,
+        "domestic",
+    ),
+    RadarFeed(
+        "ruanyifeng",
+        "阮一峰的网络日志",
+        "Web engineering",
+        ("https://www.ruanyifeng.com/blog/atom.xml",),
+        0.85,
+        "domestic",
+    ),
+    RadarFeed(
+        "jiqizhixin",
+        "机器之心",
+        "AI research and industry",
+        ("https://www.jiqizhixin.com/rss",),
+        0.8,
+        "domestic",
     ),
 )
 
@@ -103,30 +147,40 @@ class RadarCollector:
         max_items_per_source: int = 10,
     ) -> None:
         self.transport = transport
-        self.feeds = feeds
+        self.feeds = tuple(feed for feed in feeds if feed.enabled)
         self.proxy_url = proxy_url
         self.attempts_per_url = max(1, attempts_per_url)
         self.timeout_seconds = timeout_seconds
         self.max_items_per_source = max(1, max_items_per_source)
 
+    def proxy_for(self, feed: RadarFeed) -> str:
+        return self.proxy_url if feed.region == "international" else ""
+
     async def collect(self) -> list[RadarSourceResult]:
-        client_options = {
+        direct_options = {
             "timeout": self.timeout_seconds,
             "follow_redirects": True,
             "transport": self.transport,
         }
+        proxy_options = dict(direct_options)
         if self.proxy_url:
-            client_options["proxy"] = self.proxy_url
-        async with httpx.AsyncClient(**client_options) as client:
+            proxy_options["proxy"] = self.proxy_url
+        async with (
+            httpx.AsyncClient(**direct_options) as direct_client,
+            httpx.AsyncClient(**proxy_options) as proxy_client,
+        ):
             return list(
                 await asyncio.gather(
-                    *(self._collect_one(client, feed) for feed in self.feeds)
+                    *(
+                        self._collect_one(
+                            proxy_client if self.proxy_for(feed) else direct_client, feed
+                        )
+                        for feed in self.feeds
+                    )
                 )
             )
 
-    async def _collect_one(
-        self, client: httpx.AsyncClient, feed: RadarFeed
-    ) -> RadarSourceResult:
+    async def _collect_one(self, client: httpx.AsyncClient, feed: RadarFeed) -> RadarSourceResult:
         last_error: Exception | None = None
         for url in feed.urls:
             for _ in range(self.attempts_per_url):

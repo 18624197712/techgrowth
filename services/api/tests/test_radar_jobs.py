@@ -44,6 +44,7 @@ async def test_radar_job_records_partial_source_failure(client) -> None:
 
     assert result["status"] == "partial"
     assert result["successful_sources"] == 1
+    assert result["total_sources"] == 2
     assert result["failed_sources"] == ["broken"]
     assert result["inserted_items"] == 1
     assert "https://" not in str(result)

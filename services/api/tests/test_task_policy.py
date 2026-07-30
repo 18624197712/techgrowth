@@ -66,8 +66,7 @@ def draft(topic: str = "RAG evaluation", minutes: int = 35) -> TaskDraft:
             "Implement and verify a deterministic evaluator",
         ],
         theory_brief=(
-            "Grounded evaluation compares claims against retrieved evidence and records "
-            "boundaries."
+            "Grounded evaluation compares claims against retrieved evidence and records boundaries."
         ),
         problem_statement=(
             "Implement a deterministic evaluator for one grounded and one ungrounded answer, "

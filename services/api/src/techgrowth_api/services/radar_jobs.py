@@ -45,11 +45,14 @@ class RadarJobService:
     @staticmethod
     def _public(item: AgentRunRecord) -> dict:
         details = item.details or {}
+        failed_sources = details.get("failed_sources", [])
+        successful_sources = details.get("successful_sources", 0)
         return {
             "id": item.id,
             "status": item.status,
-            "successful_sources": details.get("successful_sources", 0),
-            "failed_sources": details.get("failed_sources", []),
+            "successful_sources": successful_sources,
+            "total_sources": details.get("total_sources", successful_sources + len(failed_sources)),
+            "failed_sources": failed_sources,
             "inserted_items": details.get("inserted_items", 0),
             "embedding_failures": details.get("embedding_failures", 0),
             "created_at": item.created_at,
@@ -68,6 +71,7 @@ class RadarJobService:
                     "id": "",
                     "status": "never",
                     "successful_sources": 0,
+                    "total_sources": len(getattr(self.collector, "feeds", ())),
                     "failed_sources": [],
                     "inserted_items": 0,
                     "embedding_failures": 0,
@@ -120,6 +124,7 @@ class RadarJobService:
             status = "failed" if not successful else "partial" if failed else "succeeded"
             details = {
                 "successful_sources": len(successful),
+                "total_sources": len(results),
                 "failed_sources": [result.source_id for result in failed],
                 "source_errors": {result.source_id: result.error for result in failed},
                 "inserted_items": inserted,

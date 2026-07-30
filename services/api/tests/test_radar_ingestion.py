@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from techgrowth_api.integrations.radar_collector import RadarCollector, RadarFeed
+from techgrowth_api.integrations.radar_collector import DEFAULT_FEEDS, RadarCollector, RadarFeed
 from techgrowth_api.integrations.radar_sources import FeedSource
 from techgrowth_api.services.radar import RadarService
 
@@ -77,6 +77,35 @@ def test_radar_collector_keeps_optional_proxy_configuration() -> None:
     collector = RadarCollector(proxy_url="http://proxy.internal:8080")
 
     assert collector.proxy_url == "http://proxy.internal:8080"
+
+
+def test_default_registry_contains_domestic_technology_sources() -> None:
+    domestic = {feed.source_id for feed in DEFAULT_FEEDS if feed.region == "domestic"}
+
+    assert {
+        "oschina-news",
+        "infoq-cn",
+        "segmentfault",
+        "v2ex-tech",
+        "ruanyifeng",
+        "jiqizhixin",
+    } <= domestic
+
+
+def test_outbound_proxy_is_used_only_for_international_feeds() -> None:
+    collector = RadarCollector(proxy_url="http://proxy.internal:8080")
+    domestic = RadarFeed("cn", "China", "Technology", ("https://cn.example/feed",), 0.8, "domestic")
+    international = RadarFeed(
+        "global",
+        "Global",
+        "Technology",
+        ("https://global.example/feed",),
+        0.8,
+        "international",
+    )
+
+    assert collector.proxy_for(domestic) == ""
+    assert collector.proxy_for(international) == "http://proxy.internal:8080"
 
 
 @pytest.mark.asyncio

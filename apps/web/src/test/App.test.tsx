@@ -87,12 +87,14 @@ function mockFetch(
       if (url.endsWith('/radar/status'))
         return Response.json({
           id: 'run-1', status: 'partial', successful_sources: 5,
+          total_sources: 11,
           failed_sources: ['hacker-news-ai'], inserted_items: 12,
           embedding_failures: 0, created_at: '2026-07-30T08:00:00Z',
         })
       if (url.endsWith('/radar/refresh'))
         return Response.json({
           id: 'run-2', status: 'succeeded', successful_sources: 6,
+          total_sources: 11,
           failed_sources: [], inserted_items: 3, embedding_failures: 0,
           created_at: '2026-07-30T09:00:00Z',
         })
@@ -185,9 +187,9 @@ describe('TechGrowth app', () => {
     await screen.findByRole('heading', { name: task.title })
 
     await user.click(screen.getByRole('button', { name: '技术雷达' }))
-    expect(await screen.findByText('5/6 个来源成功')).toBeInTheDocument()
+    expect(await screen.findByText('5/11 个来源成功')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '立即刷新' }))
-    expect(await screen.findByText('6/6 个来源成功')).toBeInTheDocument()
+    expect(await screen.findByText('6/11 个来源成功')).toBeInTheDocument()
   })
 
   it('renders tutor intent and the streamed model answer', async () => {
