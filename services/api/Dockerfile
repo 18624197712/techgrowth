@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
 RUN addgroup --system techgrowth && adduser --system --ingroup techgrowth techgrowth
 WORKDIR /app
 

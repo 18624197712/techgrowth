@@ -25,3 +25,10 @@ def test_worker_compose_healthcheck_tracks_the_worker_process() -> None:
     worker_service = compose.split("\n  worker:\n", 1)[1].split("\n  db:\n", 1)[0]
 
     assert 'test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]' in worker_service
+
+
+def test_api_image_accepts_a_pypi_mirror_for_production_builds() -> None:
+    dockerfile_path = Path(__file__).resolve().parents[1] / "Dockerfile"
+    dockerfile = dockerfile_path.read_text(encoding="utf-8")
+
+    assert "ARG PIP_INDEX_URL=https://pypi.org/simple" in dockerfile
