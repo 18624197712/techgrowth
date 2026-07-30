@@ -37,7 +37,9 @@ Caddy 会自动申请和续签 HTTPS 证书。Compose 只映射 Caddy 的 80/443
 
 ## 模型与通知
 
-登录后在“设置”填写 OpenAI 兼容 Base URL、聊天模型、Embedding 模型和 API Key。API Key 在数据库中加密保存。
+登录后在“设置”分别填写 Chat 与 Embedding 两套 OpenAI 兼容 Base URL、模型名和 API Key。两个 Base URL 都必须包含 `/v1`，例如 `https://api.example.com/v1`。两把 API Key 独立加密保存，已配置的密钥留空提交时保持不变，页面和 API 均不会返回密钥明文。
+
+也可以用环境变量配置两套服务：Chat 使用 `TG_CHAT_BASE_URL`、`TG_CHAT_API_KEY`、`TG_CHAT_MODEL`，Embedding 使用 `TG_EMBEDDING_BASE_URL`、`TG_EMBEDDING_API_KEY`、`TG_EMBEDDING_MODEL`。旧版的 `TG_OPENAI_BASE_URL` 和 `TG_OPENAI_API_KEY` 仍可作为共享回退值，但新部署不应依赖它们。数据库中保存的设置优先于环境变量；Chat 或 Embedding 其中一项缺失不会阻断另一项能力。
 
 SMTP 使用 `.env` 中的 `TG_SMTP_*`。Web Push 需要一对 VAPID 密钥，私钥放入 `TG_VAPID_PRIVATE_KEY`，浏览器公钥放入 `TG_VAPID_PUBLIC_KEY`，`TG_VAPID_SUBJECT` 使用管理员邮箱。通知正文只包含任务、审阅或周复盘状态，不包含代码和敏感数据。
 

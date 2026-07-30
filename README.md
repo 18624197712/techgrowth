@@ -14,6 +14,11 @@ The repository contains:
 
 See `docs/deployment.md` for production setup.
 
+Chat and Embedding providers can use different OpenAI-compatible endpoints and
+API keys. Configure them from the authenticated settings page or with the
+`TG_CHAT_*` and `TG_EMBEDDING_*` environment variables. Both Base URLs must
+include `/v1`; the older `TG_OPENAI_*` variables remain shared fallbacks only.
+
 ## Development
 
 Backend:
