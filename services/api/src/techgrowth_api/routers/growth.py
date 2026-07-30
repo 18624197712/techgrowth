@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 
 from ..dependencies import csrf_user, current_user
@@ -8,6 +10,7 @@ from ..schemas import (
     AlgorithmFrequencyRequest,
     SubmissionRequest,
     TaskGenerateRequest,
+    TaskRegenerateRequest,
 )
 
 router = APIRouter(tags=["growth"])
@@ -60,9 +63,61 @@ def task_dict(task) -> dict:
         "acceptance_checks": task.acceptance_checks,
         "rubric": task.rubric,
         "remediation_hint": task.remediation_hint,
+        "task_kind": task.task_kind,
+        "learning_objectives": task.learning_objectives,
+        "theory_brief": task.theory_brief,
+        "problem_statement": task.problem_statement,
+        "constraints": task.constraints,
+        "starter_context": task.starter_context,
+        "revealed_hints": task.hints[: task.revealed_hint_level],
+        "revealed_hint_level": task.revealed_hint_level,
+        "solution_outline": (
+            task.solution_outline if task.solution_revealed_at is not None else None
+        ),
+        "solution_revealed_at": task.solution_revealed_at,
+        "replaces_task_id": task.replaces_task_id,
+        "regeneration_reason": task.regeneration_reason,
         "status": task.status,
         "created_at": task.created_at,
     }
+
+
+@router.post("/tasks/{task_id}/regenerate", status_code=status.HTTP_201_CREATED)
+async def regenerate_task(
+    task_id: str,
+    payload: TaskRegenerateRequest,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    _: User = Depends(csrf_user),
+) -> dict:
+    key = idempotency_key or secrets.token_urlsafe(24)
+    try:
+        task = await request.app.state.services.daily_tasks.regenerate(task_id, payload.reason, key)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return task_dict(task)
+
+
+@router.post("/tasks/{task_id}/hints/{level}/reveal")
+def reveal_task_hint(
+    task_id: str, level: int, request: Request, _: User = Depends(csrf_user)
+) -> dict:
+    try:
+        return task_dict(request.app.state.services.growth.reveal_hint(task_id, level))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/tasks/{task_id}/solution/reveal")
+def reveal_task_solution(task_id: str, request: Request, _: User = Depends(csrf_user)) -> dict:
+    try:
+        return task_dict(request.app.state.services.growth.reveal_solution(task_id))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @router.post("/tasks/generate", status_code=status.HTTP_201_CREATED)

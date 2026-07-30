@@ -20,14 +20,14 @@ async def test_unconfigured_workflow_generates_bounded_fallback_task() -> None:
     service = AgentWorkflowService(Settings())
 
     task = await service.generate_daily_task(
-        node=CURRICULUM.track("ai").nodes[0],
+        node=CURRICULUM.track("python_ai").nodes[0],
         sources=[{"id": "s1", "content": "A reliable evaluation guide"}],
         recent_topics=[],
     )
 
     assert 30 <= task.expected_minutes <= 45
-    assert task.curriculum_version == "v1"
-    assert task.node_key == "ai-foundation-model-io"
+    assert task.curriculum_version == "v2"
+    assert task.node_key == "python_ai-foundation-python-core"
     assert task.source_ids == ["s1"]
     assert len(task.acceptance_checks) >= 2
     assert sum(step.minutes for step in task.instructions if not isinstance(step, str)) == 35

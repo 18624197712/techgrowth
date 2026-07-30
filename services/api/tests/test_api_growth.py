@@ -87,7 +87,7 @@ def test_daily_task_submission_creates_review_and_evidence(authenticated_client)
     task = task_response.json()
     assert 30 <= task["expected_minutes"] <= 45
     assert task["rubric"]
-    assert task["curriculum_version"] == "v1"
+    assert task["curriculum_version"] == "v2"
     assert task["deliverables"]
     assert len(task["acceptance_checks"]) >= 2
 

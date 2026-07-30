@@ -12,10 +12,10 @@ def draft(topic: str = "RAG evaluation", minutes: int = 35) -> TaskDraft:
         topic=topic,
         expected_minutes=minutes,
         objective="Measure grounded answer quality",
-        curriculum_version="v1",
-        track_key="ai",
+        curriculum_version="v2",
+        track_key="python_ai",
         stage_key="foundation",
-        node_key="ai-foundation-model-io",
+        node_key="python_ai-foundation-model-api",
         prerequisites=["Python virtual environment is ready"],
         instructions=[
             {
@@ -60,6 +60,25 @@ def draft(topic: str = "RAG evaluation", minutes: int = 35) -> TaskDraft:
             }
         ],
         remediation_hint="Fix the lowest scoring criterion and rerun its check",
+        task_kind="coding",
+        learning_objectives=[
+            "Explain grounded answer quality boundaries",
+            "Implement and verify a deterministic evaluator",
+        ],
+        theory_brief=(
+            "Grounded evaluation compares claims against retrieved evidence and records "
+            "boundaries."
+        ),
+        problem_statement=(
+            "Implement a deterministic evaluator for one grounded and one ungrounded answer, "
+            "then produce a report that explains both scores."
+        ),
+        constraints=["Use fixed fixtures", "Do not call a live model"],
+        hints=["Start with fixtures", "Separate scoring", "Compare both reports"],
+        solution_outline=(
+            "Define two fixed examples, score their supported claims independently, "
+            "and assert the report."
+        ),
     )
 
 

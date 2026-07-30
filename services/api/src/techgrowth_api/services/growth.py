@@ -118,6 +118,75 @@ class GrowthService:
                 db.expunge(task)
             return task
 
+    def reveal_hint(self, task_id: str, level: int) -> LearningTaskRecord:
+        if level not in {1, 2, 3}:
+            raise ValueError("提示级别必须是 1、2 或 3")
+        with self.session_factory() as db:
+            task = db.get(LearningTaskRecord, task_id)
+            if task is None:
+                raise LookupError("Task not found")
+            if level > len(task.hints):
+                raise ValueError("该任务没有对应提示")
+            task.revealed_hint_level = max(task.revealed_hint_level, level)
+            db.commit()
+            db.expunge(task)
+            return task
+
+    def reveal_solution(self, task_id: str) -> LearningTaskRecord:
+        with self.session_factory() as db:
+            task = db.get(LearningTaskRecord, task_id)
+            if task is None:
+                raise LookupError("Task not found")
+            task.solution_revealed_at = datetime.now(UTC)
+            db.commit()
+            db.expunge(task)
+            return task
+
+    def find_regeneration(self, key: str) -> LearningTaskRecord | None:
+        with self.session_factory() as db:
+            task = db.scalar(
+                select(LearningTaskRecord).where(LearningTaskRecord.regeneration_key == key)
+            )
+            if task is not None:
+                db.expunge(task)
+            return task
+
+    def replace_task(
+        self,
+        task_id: str,
+        draft: TaskDraft,
+        skill: str,
+        idempotency_key: str,
+    ) -> LearningTaskRecord:
+        with self.session_factory() as db:
+            existing = db.scalar(
+                select(LearningTaskRecord).where(
+                    LearningTaskRecord.regeneration_key == idempotency_key
+                )
+            )
+            if existing is not None:
+                db.expunge(existing)
+                return existing
+            task = db.get(LearningTaskRecord, task_id)
+            if task is None:
+                raise LookupError("Task not found")
+            submitted = db.scalar(
+                select(SubmissionRecord.id).where(SubmissionRecord.task_id == task_id).limit(1)
+            )
+            if submitted is not None or task.status not in {"ready", "open"}:
+                raise ValueError("已提交或已完成的任务不能重新出题")
+            replacement = LearningTaskRecord(
+                skill_name=skill,
+                status="ready",
+                regeneration_key=idempotency_key,
+                **draft.model_dump(mode="json"),
+            )
+            task.status = "replaced"
+            db.add(replacement)
+            db.commit()
+            db.expunge(replacement)
+            return replacement
+
     def submit(
         self, task_id: str, request: SubmissionRequest
     ) -> tuple[SubmissionRecord, ReviewRecord]:

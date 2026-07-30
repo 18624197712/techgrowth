@@ -42,6 +42,16 @@ class TaskDraft(BaseModel):
     rubric: list[RubricCriterionDraft] = Field(min_length=1)
     remediation_hint: str = ""
     is_remediation: bool = False
+    task_kind: Literal["theory", "coding", "debugging", "design", "review", "algorithm"] = "coding"
+    learning_objectives: list[str] = Field(default_factory=list)
+    theory_brief: str = ""
+    problem_statement: str = Field(default="", min_length=20, max_length=4_000)
+    constraints: list[str] = Field(default_factory=list)
+    starter_context: str = ""
+    hints: list[str] = Field(default_factory=list)
+    solution_outline: str = ""
+    replaces_task_id: str | None = None
+    regeneration_reason: str = ""
 
 
 class TaskPolicy:
@@ -52,6 +62,18 @@ class TaskPolicy:
         if not 30 <= task.expected_minutes <= 45:
             raise ValueError("expected_minutes must be between 30 and 45")
         if task.curriculum_version != "legacy":
+            if len(task.learning_objectives) < 2:
+                raise ValueError("curriculum task requires theory and practice objectives")
+            if len(task.theory_brief.strip()) < 20:
+                raise ValueError("curriculum task requires a concrete theory brief")
+            if len(task.problem_statement.strip()) < 30:
+                raise ValueError("curriculum task requires an explicit problem statement")
+            if not task.constraints:
+                raise ValueError("curriculum task requires constraints")
+            if len(task.hints) != 3:
+                raise ValueError("curriculum task requires exactly three hint levels")
+            if len(task.solution_outline.strip()) < 20:
+                raise ValueError("curriculum task requires a solution outline")
             if not task.deliverables:
                 raise ValueError("curriculum task requires a deliverable")
             if len(task.acceptance_checks) < 2:
@@ -73,6 +95,6 @@ class TaskPolicy:
             topic.casefold() == task.topic.casefold() and created_at >= cutoff
             for topic, created_at in recent_topics
         )
-        if repeated and not task.is_remediation:
+        if repeated and not task.is_remediation and task.replaces_task_id is None:
             raise ValueError("topic cannot repeat within 14 days")
         return task

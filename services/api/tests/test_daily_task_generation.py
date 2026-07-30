@@ -6,6 +6,7 @@ from techgrowth_api.models import LearningTaskRecord
 
 def test_growth_service_advances_after_curriculum_task_passes(client) -> None:
     growth = client.app.state.services.growth
+    client.app.state.services.curriculum.set_algorithm_frequency(0)
     for track in CURRICULUM.tracks:
         first = track.nodes[0]
         draft = client.app.state.services.daily_tasks.fallback_for(first, ["source-1"])
@@ -17,12 +18,12 @@ def test_growth_service_advances_after_curriculum_task_passes(client) -> None:
 
     selected = growth.next_curriculum_node()
 
-    assert selected.key == CURRICULUM.track("ai").nodes[1].key
+    assert selected.key == CURRICULUM.track("java").nodes[1].key
 
 
 def test_growth_service_prioritizes_curriculum_remediation(client) -> None:
     growth = client.app.state.services.growth
-    node = CURRICULUM.track("backend").nodes[0]
+    node = CURRICULUM.track("go").nodes[0]
     draft = client.app.state.services.daily_tasks.fallback_for(node, ["source-1"])
     draft.is_remediation = True
     saved = growth.save_draft(draft, node.title)
@@ -45,7 +46,7 @@ def test_manual_generation_uses_shared_curriculum_service(authenticated_client) 
 
     assert response.status_code == 201
     task = response.json()
-    assert task["curriculum_version"] == "v1"
-    assert task["track_key"] == "ai"
-    assert task["node_key"] == "ai-foundation-model-io"
+    assert task["curriculum_version"] == "v2"
+    assert task["track_key"] in {"java", "algorithms"}
+    assert task["node_key"].startswith(task["track_key"])
     assert len(task["acceptance_checks"]) >= 2

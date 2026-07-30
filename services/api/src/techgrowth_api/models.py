@@ -125,6 +125,23 @@ class LearningTaskRecord(Base):
     acceptance_checks: Mapped[list[dict]] = mapped_column(JSON, default=list)
     rubric: Mapped[list[dict]] = mapped_column(JSON)
     remediation_hint: Mapped[str] = mapped_column(Text, default="")
+    task_kind: Mapped[str] = mapped_column(String(24), default="coding")
+    learning_objectives: Mapped[list[str]] = mapped_column(JSON, default=list)
+    theory_brief: Mapped[str] = mapped_column(Text, default="")
+    problem_statement: Mapped[str] = mapped_column(Text, default="")
+    constraints: Mapped[list[str]] = mapped_column(JSON, default=list)
+    starter_context: Mapped[str] = mapped_column(Text, default="")
+    hints: Mapped[list[str]] = mapped_column(JSON, default=list)
+    revealed_hint_level: Mapped[int] = mapped_column(Integer, default=0)
+    solution_outline: Mapped[str] = mapped_column(Text, default="")
+    solution_revealed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    replaces_task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learning_tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    regeneration_reason: Mapped[str] = mapped_column(Text, default="")
+    regeneration_key: Mapped[str | None] = mapped_column(String(120), nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String(24), default="ready")
     is_remediation: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

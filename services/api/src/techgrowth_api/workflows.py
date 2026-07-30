@@ -4,7 +4,7 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .config import Settings
-from .domain.curriculum import CurriculumNode
+from .domain.curriculum import CURRICULUM, CurriculumNode
 from .domain.tasks import TaskDraft, TaskPolicy
 from .integrations.model_client import ModelClient, ModelClientError
 
@@ -32,12 +32,17 @@ def _score_anchors(subject: str) -> dict[str, str]:
 
 
 def build_curriculum_fallback(node: CurriculumNode, source_ids: list[str]) -> TaskDraft:
+    task_kind = "algorithm" if node.track_key == "algorithms" else "coding"
     return TaskDraft(
         title=f"实作：{node.title}",
         topic=node.title,
         expected_minutes=35,
         objective=node.objective,
-        curriculum_version="v1",
+        curriculum_version=(
+            CURRICULUM.version
+            if any(track.key == node.track_key for track in CURRICULUM.tracks)
+            else "v1"
+        ),
         track_key=node.track_key,
         stage_key=node.stage_key,
         node_key=node.key,
@@ -91,6 +96,35 @@ def build_curriculum_fallback(node: CurriculumNode, source_ids: list[str]) -> Ta
             },
         ],
         remediation_hint="只补做最低分 Rubric 项，并重新运行对应验收检查",
+        task_kind=task_kind,
+        learning_objectives=[
+            f"解释“{node.objective}”涉及的核心概念与适用边界",
+            f"实现并验证一个能够证明“{node.objective}”的最小实验",
+        ],
+        theory_brief=(
+            f"本题聚焦“{node.objective}”。开始编码前，需要先写清关键概念、输入输出、"
+            "成功条件和失败边界，并说明所选方案为何适合当前约束。"
+        ),
+        problem_statement=(
+            f"在一个独立练习分支中完成“{node.objective}”的最小可运行实现。"
+            "实现必须包含一个正常场景和一个失败场景，使用可重复命令验证结果，"
+            "并在 report.md 中记录设计取舍、真实输出和仍可改进之处。"
+        ),
+        constraints=[
+            "总投入控制在 30 至 45 分钟，不引入与目标无关的框架或重构",
+            "不得只提交文字结论；实现或答案必须有可复现的验收证据",
+            "失败场景必须被测试或检查明确覆盖",
+        ],
+        starter_context="使用当前授权仓库的独立分支；若没有合适仓库，创建最小练习目录。",
+        hints=[
+            "先把成功条件和失败边界写成两个可检查的例子，再选择最小实现。",
+            "让核心逻辑与外部 I/O 分离，使正常和失败场景都能通过单条命令验证。",
+            "先完成最短成功路径，再加入失败用例；用 report.md 对照每条验收标准记录结果。",
+        ],
+        solution_outline=(
+            "参考思路：先定义输入、输出和不变量，把核心行为实现为可独立测试的最小单元；"
+            "随后分别构造成功与失败样例，执行测试命令并把输出、取舍和改进点记录到报告。"
+        ),
     )
 
 
@@ -123,8 +157,9 @@ class AgentWorkflowService:
         try:
             task = await self.model.structured(
                 "Design one concrete, evidence-backed 30-45 minute programming exercise. "
-                "Use structured steps, observable expected results, two acceptance checks, "
-                "and complete 0-4 rubric anchors. Return Chinese task content.",
+                "Include theory, an explicit problem statement, constraints, three progressive "
+                "hints, a solution outline, structured steps, observable expected results, two "
+                "acceptance checks, and complete 0-4 rubric anchors. Return Chinese task content.",
                 prompt,
                 TaskDraft,
             )
@@ -132,7 +167,11 @@ class AgentWorkflowService:
                 raise ValueError("model returned an unknown source ID")
             task = task.model_copy(
                 update={
-                    "curriculum_version": "v1",
+                    "curriculum_version": (
+                        CURRICULUM.version
+                        if any(track.key == node.track_key for track in CURRICULUM.tracks)
+                        else "v1"
+                    ),
                     "track_key": node.track_key,
                     "stage_key": node.stage_key,
                     "node_key": node.key,

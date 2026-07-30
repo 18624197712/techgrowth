@@ -23,6 +23,10 @@ class AlgorithmFrequencyRequest(BaseModel):
     days_per_week: int = Field(ge=0, le=7)
 
 
+class TaskRegenerateRequest(BaseModel):
+    reason: str = Field(default="重新出题", min_length=2, max_length=500)
+
+
 class SubmissionRequest(BaseModel):
     summary: str = Field(min_length=5, max_length=10_000)
     artifact_kind: str
