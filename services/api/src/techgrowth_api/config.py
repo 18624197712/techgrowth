@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     icp_number: str = ""
     openai_base_url: str = ""
     openai_api_key: str = ""
+    chat_base_url: str = ""
+    chat_api_key: str = ""
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
     chat_model: str = ""
     embedding_model: str = ""
     max_agent_tokens: int = 30_000

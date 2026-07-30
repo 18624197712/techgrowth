@@ -11,6 +11,37 @@ from .services.container import ServiceContainer
 from .workflows import AgentWorkflowService
 
 
+def resolve_provider_settings(settings: Settings, stored: dict[str, str]) -> Settings:
+    legacy_base_url = stored.get("base_url", "")
+    legacy_api_key = stored.get("api_key", "")
+    return settings.model_copy(
+        update={
+            "chat_base_url": stored.get("chat.base_url")
+            or legacy_base_url
+            or settings.chat_base_url
+            or settings.openai_base_url,
+            "chat_api_key": stored.get("chat.api_key")
+            or legacy_api_key
+            or settings.chat_api_key
+            or settings.openai_api_key,
+            "chat_model": stored.get("chat.model")
+            or stored.get("chat_model")
+            or settings.chat_model,
+            "embedding_base_url": stored.get("embedding.base_url")
+            or legacy_base_url
+            or settings.embedding_base_url
+            or settings.openai_base_url,
+            "embedding_api_key": stored.get("embedding.api_key")
+            or legacy_api_key
+            or settings.embedding_api_key
+            or settings.openai_api_key,
+            "embedding_model": stored.get("embedding.model")
+            or stored.get("embedding_model")
+            or settings.embedding_model,
+        }
+    )
+
+
 def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.timezone)
     collector = RadarCollector()
@@ -24,14 +55,7 @@ def build_scheduler(settings: Settings, services: ServiceContainer) -> AsyncIOSc
             return
         sources = services.radar.list_items()[:5]
         provider = services.settings.provider_values()
-        workflow_settings = settings.model_copy(
-            update={
-                "openai_base_url": provider.get("base_url", settings.openai_base_url),
-                "openai_api_key": provider.get("api_key", settings.openai_api_key),
-                "chat_model": provider.get("chat_model", settings.chat_model),
-                "embedding_model": provider.get("embedding_model", settings.embedding_model),
-            }
-        )
+        workflow_settings = resolve_provider_settings(settings, provider)
         workflow = AgentWorkflowService(workflow_settings)
         draft = await workflow.generate_daily_task(
             skill="AI Agent engineering",
