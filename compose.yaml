@@ -87,6 +87,11 @@ services:
         condition: service_healthy
     networks:
       - data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     logging: *default-logging
 
   db:
