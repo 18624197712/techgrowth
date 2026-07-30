@@ -111,4 +111,3 @@ class CredentialStore:
                 self.backend.delete_password(self.SERVICE, username)
             except Exception:
                 pass
-

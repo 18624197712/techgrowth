@@ -20,4 +20,3 @@ def test_manifest_reads_git_head_and_language_counts_without_executing_code(tmp_
     assert manifest["last_commit"] == "abc123"
     assert manifest["languages"] == {"Python": 11, "TypeScript": 9}
     assert len(manifest["external_key"]) == 64
-

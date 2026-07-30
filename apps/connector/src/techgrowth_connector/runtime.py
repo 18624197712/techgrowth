@@ -120,4 +120,3 @@ class ConnectorRuntime:
         if self.client is None:
             raise RuntimeError("connector is not paired")
         return self.client
-

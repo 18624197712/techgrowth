@@ -5,7 +5,7 @@ from techgrowth_api.services.chat_context import ChatContextService
 
 
 def test_task_context_contains_only_whitelisted_task_fields(client) -> None:
-    node = CURRICULUM.track("ai").nodes[0]
+    node = CURRICULUM.track("python_ai").nodes[0]
     draft = client.app.state.services.daily_tasks.fallback_for(node, ["source-1"])
     task = client.app.state.services.growth.save_draft(draft, node.title)
     service = ChatContextService(client.app.state.database.session_factory)

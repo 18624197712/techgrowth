@@ -55,4 +55,3 @@ class ConnectorServices:
             self.runtime.client.close()
         self.runtime.client = None
         self.credentials.clear()
-

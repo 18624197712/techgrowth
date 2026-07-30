@@ -85,9 +85,7 @@ class OfflineQueue:
     def mark_failed(self, item_id: str, error: str, *, now: float | None = None) -> None:
         current = time.time() if now is None else now
         with self._connect() as db:
-            row = db.execute(
-                "SELECT attempts FROM queue_items WHERE id = ?", (item_id,)
-            ).fetchone()
+            row = db.execute("SELECT attempts FROM queue_items WHERE id = ?", (item_id,)).fetchone()
             if not row:
                 return
             attempts = int(row[0]) + 1

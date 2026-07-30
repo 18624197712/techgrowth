@@ -72,4 +72,3 @@ def test_repository_discovery_skips_dependency_directories(tmp_path: Path) -> No
     repositories = RepositoryScanner([root]).discover_repositories()
 
     assert repositories == [expected.resolve()]
-

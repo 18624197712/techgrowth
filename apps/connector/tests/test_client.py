@@ -16,9 +16,7 @@ def verify_signature(request: httpx.Request, identity: DeviceIdentity) -> None:
     timestamp = request.headers["X-Timestamp"]
     nonce = request.headers["X-Nonce"]
     digest = hashlib.sha256(request.content).hexdigest()
-    canonical = (
-        f"{request.method}\n{request.url.path}\n{timestamp}\n{nonce}\n{digest}".encode()
-    )
+    canonical = f"{request.method}\n{request.url.path}\n{timestamp}\n{nonce}\n{digest}".encode()
     key = Ed25519PublicKey.from_public_bytes(base64.b64decode(identity.public_key_b64))
     key.verify(base64.b64decode(request.headers["X-Signature"]), canonical)
 

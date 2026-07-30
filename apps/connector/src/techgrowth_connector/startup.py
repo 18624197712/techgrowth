@@ -38,4 +38,3 @@ def set_startup_enabled(enabled: bool) -> None:
                 winreg.DeleteValue(key, VALUE_NAME)
             except FileNotFoundError:
                 pass
-
