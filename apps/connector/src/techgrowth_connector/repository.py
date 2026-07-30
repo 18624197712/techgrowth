@@ -1,3 +1,4 @@
+import configparser
 import hashlib
 from pathlib import Path
 
@@ -32,11 +33,22 @@ def build_manifest(repository: Path, files: list[Path]) -> dict:
     external_key = hashlib.sha256(str(root).casefold().encode()).hexdigest()
     return {
         "external_key": external_key,
+        "local_fingerprint": external_key,
+        "remote_url": _read_remote(root / ".git"),
         "name": root.name,
         "default_branch": branch,
         "languages": languages,
         "last_commit": commit,
     }
+
+
+def _read_remote(git_dir: Path) -> str:
+    config_path = git_dir / "config"
+    if not config_path.exists():
+        return ""
+    parser = configparser.ConfigParser()
+    parser.read(config_path, encoding="utf-8")
+    return parser.get('remote "origin"', "url", fallback="").strip()
 
 
 def _read_head(git_dir: Path) -> tuple[str, str]:
@@ -56,4 +68,3 @@ def _read_head(git_dir: Path) -> tuple[str, str]:
                 if name == reference:
                     return branch, commit
     return branch, ""
-

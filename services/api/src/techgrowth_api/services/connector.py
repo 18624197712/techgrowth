@@ -20,8 +20,9 @@ from ..schemas import RepositoryManifestRequest, SyncJobRequest
 
 
 class ConnectorService:
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory, repositories=None) -> None:
         self.session_factory = session_factory
+        self.repositories = repositories
 
     def create_pairing_code(self) -> tuple[str, datetime]:
         code = f"{secrets.randbelow(1_000_000):06d}"
@@ -110,6 +111,8 @@ class ConnectorService:
     def register_repository(
         self, device_id: str, manifest: RepositoryManifestRequest
     ) -> RepositoryRecord:
+        if self.repositories is not None:
+            return self.repositories.register_connector(device_id, manifest)
         now = datetime.now(UTC)
         with self.session_factory() as db:
             repository = db.scalar(
@@ -131,6 +134,8 @@ class ConnectorService:
             return repository
 
     def list_repositories(self) -> list[RepositoryRecord]:
+        if self.repositories is not None:
+            return self.repositories.list()
         with self.session_factory() as db:
             return list(
                 db.scalars(

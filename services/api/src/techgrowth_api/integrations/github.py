@@ -13,6 +13,7 @@ class GitHubRepository:
     default_branch: str
     pushed_at: datetime
     languages: dict[str, int]
+    html_url: str = ""
 
 
 class GitHubClient:
@@ -53,6 +54,7 @@ class GitHubClient:
                         default_branch=item["default_branch"],
                         pushed_at=datetime.fromisoformat(item["pushed_at"].replace("Z", "+00:00")),
                         languages=percentages,
+                        html_url=item.get("html_url", f"https://github.com/{item['full_name']}"),
                     )
                 )
             return result

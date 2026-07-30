@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .bootstrap import ConnectorServices
+from .client import diagnose_server
 from .startup import is_startup_enabled, set_startup_enabled
 
 
@@ -121,6 +122,9 @@ class TrayController(QObject):
         if dialog.exec() != QDialog.Accepted:
             return
         try:
+            diagnostic = diagnose_server(dialog.server.text().strip())
+            if not diagnostic.ok:
+                raise RuntimeError(diagnostic.message)
             self.services.pair(
                 dialog.server.text().strip(),
                 dialog.code.text().strip(),

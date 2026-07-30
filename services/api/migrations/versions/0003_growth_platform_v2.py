@@ -73,9 +73,37 @@ def upgrade() -> None:
                 server_default=sa.func.now(),
             ),
         )
+    repository_columns = {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("repositories")
+    }
+    repository_additions = (
+        ("provider_id", sa.String(120), True, None),
+        ("canonical_remote", sa.String(500), True, None),
+        ("local_fingerprint", sa.String(300), False, ""),
+        ("match_status", sa.String(24), False, "unmatched"),
+    )
+    for name, column_type, nullable, default in repository_additions:
+        if name not in repository_columns:
+            op.add_column(
+                "repositories",
+                sa.Column(
+                    name,
+                    column_type,
+                    nullable=nullable,
+                    server_default=default,
+                ),
+            )
+            op.create_index(f"ix_repositories_{name}", "repositories", [name])
 
 
 def downgrade() -> None:
+    repository_columns = {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("repositories")
+    }
+    for name in ("match_status", "local_fingerprint", "canonical_remote", "provider_id"):
+        if name in repository_columns:
+            op.drop_index(f"ix_repositories_{name}", table_name="repositories")
+            op.drop_column("repositories", name)
     if "curriculum_state" in sa.inspect(op.get_bind()).get_table_names():
         op.drop_table("curriculum_state")
     task_columns = {

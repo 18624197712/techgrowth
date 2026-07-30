@@ -59,6 +59,8 @@ class NotificationPreferencesRequest(BaseModel):
 
 class RepositoryManifestRequest(BaseModel):
     external_key: str
+    local_fingerprint: str = ""
+    remote_url: str = ""
     name: str
     default_branch: str = "main"
     languages: dict[str, int] = Field(default_factory=dict)

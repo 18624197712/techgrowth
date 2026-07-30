@@ -86,7 +86,7 @@ export function Workbench({ user, onLogout }: { user: User; onLogout: () => void
     if (view === 'analytics') return <DataPlatform />
     if (view === 'curriculum') return <CurriculumCenter />
     if (view === 'radar') return <RadarView items={radar} selected={selectedRadar} onSelect={setSelectedRadar} onReload={load} />
-    if (view === 'repositories') return <RepositoryView items={repositories} />
+    if (view === 'repositories') return <RepositoryView items={repositories} onReload={async () => setRepositories(await api<Repository[]>('/repositories'))} />
     if (view === 'growth') return <GrowthView skills={profile} />
     if (view === 'weekly') return <WeeklyView items={weekly} onReload={load} />
     return <SettingsView setup={setup} preferences={preferences} onSaved={load} />
@@ -199,10 +199,23 @@ function RadarView({ items, selected, onSelect, onReload }: { items: RadarItem[]
   return <section><SectionHeader eyebrow="技术雷达" title="值得关注的技术变化" action={<button className="secondary-button" onClick={() => void refresh()} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} />立即刷新</button>} />{status && <div className={`radar-status ${status.status}`}><strong>{status.successful_sources}/{status.total_sources} 个来源成功</strong><span>新增 {status.inserted_items} 条</span>{status.created_at && <time>{new Date(status.created_at).toLocaleString('zh-CN')}</time>}{status.failed_sources.length > 0 && <small>失败：{status.failed_sources.join('、')}</small>}</div>}{error && <p className="form-error" role="alert">{error}</p>}<div className="filter-row">{topics.map((item) => <button className={topic === item ? 'active' : ''} key={item} onClick={() => setTopic(item)}>{item}</button>)}</div><div className="radar-list">{filtered.map((item) => <article className={selected === item.id ? 'selected' : ''} key={item.id} onClick={() => onSelect(item.id)}><div className="radar-meta"><span>{item.source_name}</span><span>可信度 {Math.round(item.credibility * 100)}%</span><span>相关度 {Math.round(item.relevance * 100)}%</span></div><h2>{item.title}</h2><p>{item.summary}</p><footer><small>{item.relevance_reason}</small><a href={item.source_url} target="_blank" rel="noreferrer" title="打开来源"><ExternalLink size={16} /></a></footer></article>)}</div></section>
 }
 
-function RepositoryView({ items }: { items: Repository[] }) {
+function RepositoryView({ items, onReload }: { items: Repository[]; onReload: () => Promise<void> }) {
   const [pairing, setPairing] = useState<{ code: string; expires_at: string } | null>(null)
+  const [githubToken, setGithubToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   async function createPairing() { setPairing(await api('/connectors/pairing-codes', { method: 'POST' })) }
-  return <section><SectionHeader eyebrow="代码证据" title="项目与仓库" action={<button className="secondary-button" onClick={() => void createPairing()}><ShieldCheck size={17} />配对连接器</button>} />{pairing && <div className="pairing-band"><span>配对码</span><strong>{pairing.code}</strong><small>10 分钟内有效</small></div>}<div className="repository-table"><div className="table-head"><span>仓库</span><span>主要语言</span><span>最近提交</span><span>同步状态</span></div>{items.map((item) => <div className="table-row" key={item.id}><strong>{item.name}</strong><span>{Object.entries(item.languages).slice(0, 2).map(([name, value]) => `${name} ${value}%`).join(' · ') || '未识别'}</span><code>{item.last_commit.slice(0, 8) || '—'}</code><span className="sync-state">{item.last_synced_at ? '已同步' : '等待同步'}</span></div>)}</div>{items.length === 0 && <p className="empty-note centered">还没有已同步仓库。</p>}</section>
+  async function importGithub(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage(''); setError('')
+    try {
+      await api('/setup/github', { method: 'PUT', body: JSON.stringify({ token: githubToken }) })
+      const result = await api<{ imported: number }>('/repositories/github/import', { method: 'POST' })
+      setGithubToken(''); setMessage(`已导入 ${result.imported} 个 GitHub 仓库`); await onReload()
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'GitHub 仓库导入失败') }
+    finally { setBusy(false) }
+  }
+  return <section><SectionHeader eyebrow="代码证据" title="项目与仓库" action={<button className="secondary-button" onClick={() => void createPairing()}><ShieldCheck size={17} />配对连接器</button>} />{pairing && <div className="pairing-band"><span>配对码</span><strong>{pairing.code}</strong><small>10 分钟内有效</small></div>}<form className="github-import" onSubmit={importGithub}><label>GitHub Fine-grained PAT<input type="password" value={githubToken} onChange={(event) => setGithubToken(event.target.value)} required /></label><button className="secondary-button" disabled={busy}><GitBranch size={17} />验证并导入</button></form>{message && <p className="form-success" role="status">{message}</p>}{error && <p className="form-error" role="alert">{error}</p>}<div className="repository-table"><div className="table-head"><span>仓库</span><span>主要语言</span><span>最近提交</span><span>匹配状态</span></div>{items.map((item) => <div className="table-row" key={item.id}><div className="repository-identity"><strong>{item.name}</strong><small>{item.canonical_remote || '未发现 Git 远程地址'}</small></div><span>{Object.entries(item.languages).slice(0, 2).map(([name, value]) => `${name} ${value}%`).join(' · ') || '未识别'}</span><code>{item.last_commit.slice(0, 8) || '—'}</code><span className={`match-state ${item.match_status}`}>{item.match_status === 'matched' ? '已匹配' : item.match_status === 'ambiguous' ? '待确认' : '未匹配'}</span></div>)}</div>{items.length === 0 && <p className="empty-note centered">还没有已同步仓库。</p>}</section>
 }
 
 const levelLabels = { discovering: '入门', practicing: '练习中', applied: '已应用', proficient: '熟练' }

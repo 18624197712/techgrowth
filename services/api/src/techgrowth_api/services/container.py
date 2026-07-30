@@ -14,6 +14,7 @@ from .growth import GrowthService
 from .notifications import NotificationService
 from .radar import RadarService
 from .radar_jobs import RadarJobService
+from .repositories import RepositoryService
 from .settings import SettingsService
 from .weekly import WeeklyService
 
@@ -34,6 +35,7 @@ class ServiceContainer:
     chat_actions: ChatActionService
     curriculum: CurriculumService
     analytics: AnalyticsService
+    repositories: RepositoryService
 
     @classmethod
     def build(cls, database: Database, settings: Settings) -> "ServiceContainer":
@@ -47,7 +49,8 @@ class ServiceContainer:
         daily_tasks = DailyTaskService(settings, growth, radar, provider_settings)
         radar_jobs = RadarJobService(factory, settings, radar, provider_settings)
         chat_context = ChatContextService(factory)
-        connector = ConnectorService(factory)
+        repositories = RepositoryService(factory)
+        connector = ConnectorService(factory, repositories)
         chat_actions = ChatActionService(factory, daily_tasks, growth, radar, curriculum, connector)
         return cls(
             auth=auth,
@@ -64,4 +67,5 @@ class ServiceContainer:
             chat_actions=chat_actions,
             curriculum=curriculum,
             analytics=analytics,
+            repositories=repositories,
         )

@@ -19,6 +19,57 @@ class Pairing:
     device_token: str
 
 
+@dataclass(frozen=True, slots=True)
+class ConnectionDiagnostic:
+    ok: bool
+    code: str
+    message: str
+
+
+def diagnose_server(
+    base_url: str, *, http: httpx.Client | None = None, timeout: float = 12.0
+) -> ConnectionDiagnostic:
+    parsed = urlparse(base_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return ConnectionDiagnostic(False, "invalid_url", "服务器地址必须是有效的 HTTPS 地址")
+    owned_client = http is None
+    client = http or httpx.Client(timeout=timeout, follow_redirects=True)
+    try:
+        response = client.get(f"{base_url.rstrip('/')}/api/v1/health")
+        body = response.text.casefold()
+        if response.status_code == 403 and (
+            "non-compliance icp filing" in body or response.headers.get("server") == "Beaver"
+        ):
+            return ConnectionDiagnostic(
+                False, "icp_blocked", "阿里云备案接入拦截，请先完成域名备案接入后再配对"
+            )
+        if response.status_code != 200:
+            return ConnectionDiagnostic(
+                False, "http_error", f"服务器健康检查返回 HTTP {response.status_code}"
+            )
+        try:
+            healthy = response.json().get("status") == "ok"
+        except (ValueError, AttributeError):
+            healthy = False
+        if not healthy:
+            return ConnectionDiagnostic(False, "unhealthy", "服务器健康检查响应无效")
+        return ConnectionDiagnostic(True, "ok", "服务器连接正常")
+    except httpx.TimeoutException:
+        return ConnectionDiagnostic(False, "timeout", "连接服务器超时")
+    except httpx.ConnectError as exc:
+        detail = str(exc).casefold()
+        if any(value in detail for value in ("eof", "reset", "ssl", "tls")):
+            return ConnectionDiagnostic(
+                False, "tls_connection_failed", "TLS 连接被中断，请检查域名证书和备案接入状态"
+            )
+        if any(value in detail for value in ("name", "dns", "getaddrinfo")):
+            return ConnectionDiagnostic(False, "dns_failed", "域名 DNS 解析失败")
+        return ConnectionDiagnostic(False, "connection_failed", "无法连接服务器")
+    finally:
+        if owned_client:
+            client.close()
+
+
 class ConnectorClient:
     def __init__(
         self,

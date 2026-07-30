@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from tests.test_connector_routes import pair_device, signed_headers
+from test_connector_routes import pair_device, signed_headers
 
 
 def test_connector_registers_repository_and_receives_admin_job(authenticated_client) -> None:

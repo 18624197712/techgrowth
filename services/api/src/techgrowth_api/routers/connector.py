@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from ..dependencies import connector_device, csrf_user, current_user
+from ..integrations.github import GitHubClient
 from ..models import ConnectorDeviceRecord, User
 from ..schemas import (
     CompleteSyncJobRequest,
@@ -19,6 +20,10 @@ router = APIRouter(tags=["connector"])
 
 class HeartbeatRequest(BaseModel):
     version: str
+
+
+class GitHubTokenRequest(BaseModel):
+    token: str
 
 
 @router.post("/connectors/pairing-codes")
@@ -108,12 +113,41 @@ def list_repositories(request: Request, _: User = Depends(current_user)) -> list
             "device_id": item.device_id,
             "name": item.name,
             "provider": item.provider,
+            "provider_id": item.provider_id,
+            "canonical_remote": item.canonical_remote,
+            "local_fingerprint": item.local_fingerprint,
+            "match_status": item.match_status,
             "languages": item.languages,
             "last_commit": item.last_commit,
             "last_synced_at": item.last_synced_at,
         }
         for item in request.app.state.services.connector.list_repositories()
     ]
+
+
+@router.put("/setup/github")
+async def save_github_token(
+    payload: GitHubTokenRequest, request: Request, _: User = Depends(csrf_user)
+) -> dict:
+    try:
+        await GitHubClient(payload.token).repositories()
+    except Exception as exc:
+        raise HTTPException(422, "GitHub token validation failed") from exc
+    request.app.state.services.settings.save_secret("github.token", payload.token)
+    return {"configured": True}
+
+
+@router.post("/repositories/github/import")
+async def import_github_repositories(request: Request, _: User = Depends(csrf_user)) -> dict:
+    token = request.app.state.services.settings.secret("github.token")
+    if not token:
+        raise HTTPException(409, "GitHub token is not configured")
+    try:
+        items = await GitHubClient(token).repositories()
+    except Exception as exc:
+        raise HTTPException(502, "GitHub repository import failed") from exc
+    imported = request.app.state.services.repositories.import_github(items)
+    return {"imported": len(imported)}
 
 
 @router.post("/connectors/{device_id}/jobs", status_code=status.HTTP_201_CREATED)

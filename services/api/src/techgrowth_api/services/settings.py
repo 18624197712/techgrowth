@@ -91,3 +91,26 @@ class SettingsService:
             }
             for capability in self.CAPABILITIES
         }
+
+    def save_secret(self, key: str, value: str) -> None:
+        if not value:
+            raise ValueError("Secret value is required")
+        with self.session_factory() as db:
+            record = db.get(AppSettingRecord, key)
+            encrypted = self.cipher.encrypt(value)
+            if record:
+                record.value_enc = encrypted
+                record.updated_at = datetime.now(UTC)
+            else:
+                db.add(AppSettingRecord(key=key, value_enc=encrypted))
+            db.commit()
+
+    def secret(self, key: str) -> str:
+        with self.session_factory() as db:
+            record = db.get(AppSettingRecord, key)
+            return self.cipher.decrypt(record.value_enc) if record else ""
+
+    def encrypted_value(self, key: str) -> str:
+        with self.session_factory() as db:
+            record = db.get(AppSettingRecord, key)
+            return record.value_enc if record else ""

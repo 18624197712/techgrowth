@@ -129,6 +129,10 @@ export type Repository = {
   device_id: string | null
   name: string
   provider: string
+  provider_id: string | null
+  canonical_remote: string | null
+  local_fingerprint: string
+  match_status: 'matched' | 'unmatched' | 'ambiguous'
   languages: Record<string, number>
   last_commit: string
   last_synced_at: string | null
@@ -154,6 +158,7 @@ export type SetupStatus = {
   icp_number: string
   smtp_configured: boolean
   web_push_configured: boolean
+  github: { configured: boolean }
   vapid_public_key: string
 }
 

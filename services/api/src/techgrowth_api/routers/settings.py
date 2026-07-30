@@ -18,6 +18,7 @@ def setup_status(request: Request, _: User = Depends(current_user)) -> dict:
         "smtp_configured": bool(request.app.state.settings.smtp_host),
         "web_push_configured": bool(request.app.state.settings.vapid_public_key),
         "vapid_public_key": request.app.state.settings.vapid_public_key,
+        "github": {"configured": bool(request.app.state.services.settings.secret("github.token"))},
     }
 
 

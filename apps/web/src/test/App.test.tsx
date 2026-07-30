@@ -61,6 +61,20 @@ const radarItem = {
   published_at: '2026-07-29T10:00:00Z',
 }
 
+const repository = {
+  id: 'repo-1',
+  device_id: 'device-1',
+  name: 'techgrowth',
+  provider: 'connector+github',
+  provider_id: 'github:7',
+  canonical_remote: 'github.com/owner/techgrowth',
+  local_fingerprint: 'projects/techgrowth',
+  match_status: 'matched',
+  languages: { TypeScript: 60, Python: 40 },
+  last_commit: 'abcdef123456',
+  last_synced_at: '2026-07-30T09:00:00Z',
+}
+
 const tutorEvents = [
   'event: intent\ndata: {"intent":"task_coaching","confidence":0.91,"needs_action":false}',
   'event: token\ndata: {"text":"先运行验收命令，再补充最低分项的证据。"}',
@@ -100,7 +114,9 @@ function mockFetch(
         })
       if (url.endsWith('/radar')) return Response.json([radarItem])
       if (url.endsWith('/profile')) return Response.json([])
-      if (url.endsWith('/repositories')) return Response.json([])
+      if (url.endsWith('/repositories')) return Response.json([repository])
+      if (url.endsWith('/setup/github')) return Response.json({ configured: true })
+      if (url.endsWith('/repositories/github/import')) return Response.json({ imported: 1 })
       if (url.endsWith('/weekly-reviews')) return Response.json([])
       if (url.endsWith('/setup'))
         return Response.json({
@@ -109,6 +125,7 @@ function mockFetch(
             embedding: { base_url: 'https://embed.example/v1', model: 'embed-model', api_key_configured: false },
           },
           icp_number: '',
+          github: { configured: false },
         })
       if (url.endsWith('/notifications/preferences')) return Response.json([])
       if (url.includes('/analytics/'))
@@ -280,5 +297,29 @@ describe('TechGrowth app', () => {
     await user.click(screen.getByRole('button', { name: '将 Go 设为主路线' }))
 
     expect(switchBody).toEqual({ track_key: 'go' })
+  })
+
+  it('validates a GitHub token and imports matching repositories', async () => {
+    const requests: Array<{ url: string; body: unknown }> = []
+    mockFetch(true, (url, init) => {
+      requests.push({
+        url,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      })
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '项目与仓库' }))
+    expect(await screen.findByText('已匹配')).toBeInTheDocument()
+    expect(screen.getByText('github.com/owner/techgrowth')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('GitHub Fine-grained PAT'), 'github-token')
+    await user.click(screen.getByRole('button', { name: '验证并导入' }))
+
+    expect(requests.some((item) => item.url.endsWith('/setup/github') &&
+      JSON.stringify(item.body) === JSON.stringify({ token: 'github-token' }))).toBe(true)
+    expect(requests.some((item) => item.url.endsWith('/repositories/github/import'))).toBe(true)
+    expect(await screen.findByText('已导入 1 个 GitHub 仓库')).toBeInTheDocument()
   })
 })
