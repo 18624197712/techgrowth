@@ -6,15 +6,60 @@ from techgrowth_api.domain.tasks import TaskDraft, TaskPolicy
 
 
 def draft(topic: str = "RAG evaluation", minutes: int = 35) -> TaskDraft:
+    first_step_minutes = minutes // 2
     return TaskDraft(
         title="Build a retrieval evaluator",
         topic=topic,
         expected_minutes=minutes,
         objective="Measure grounded answer quality",
-        instructions=["Create fixtures", "Run the evaluator"],
+        curriculum_version="v1",
+        track_key="ai",
+        stage_key="foundation",
+        node_key="ai-foundation-model-io",
+        prerequisites=["Python virtual environment is ready"],
+        instructions=[
+            {
+                "action": "Create deterministic request fixtures",
+                "minutes": first_step_minutes,
+                "expected_result": "A fixture covers one success and one failure",
+            },
+            {
+                "action": "Run the evaluator against both fixtures",
+                "minutes": minutes - first_step_minutes,
+                "expected_result": "The report distinguishes the two outcomes",
+            },
+        ],
         source_ids=["source-1"],
         submission_kinds=["commit"],
-        rubric=[{"key": "correctness", "label": "Correctness", "critical": True}],
+        deliverables=["Evaluator implementation and report"],
+        acceptance_checks=[
+            {
+                "method": "command",
+                "instruction": "pytest -q",
+                "expected_result": "All evaluator tests pass",
+            },
+            {
+                "method": "inspection",
+                "instruction": "Inspect the generated report",
+                "expected_result": "Both fixtures have an explained score",
+            },
+        ],
+        rubric=[
+            {
+                "key": "correctness",
+                "label": "Correctness",
+                "description": "The evaluator distinguishes grounded and ungrounded output",
+                "critical": True,
+                "score_anchors": {
+                    "0": "No runnable evaluator",
+                    "1": "Runs but does not score",
+                    "2": "Scores only the happy path",
+                    "3": "Scores both fixtures correctly",
+                    "4": "Also explains each score",
+                },
+            }
+        ],
+        remediation_hint="Fix the lowest scoring criterion and rerun its check",
     )
 
 
@@ -36,3 +81,27 @@ def test_remediation_can_repeat_recent_topic() -> None:
     item.is_remediation = True
 
     assert TaskPolicy.validate(item, recent) is item
+
+
+def test_curriculum_task_requires_two_acceptance_checks() -> None:
+    item = draft()
+    item.acceptance_checks = item.acceptance_checks[:1]
+
+    with pytest.raises(ValueError, match="acceptance checks"):
+        TaskPolicy.validate(item, [])
+
+
+def test_curriculum_task_step_minutes_must_match_expected_minutes() -> None:
+    item = draft()
+    item.instructions[0].minutes = 5
+
+    with pytest.raises(ValueError, match="step minutes"):
+        TaskPolicy.validate(item, [])
+
+
+def test_curriculum_task_requires_complete_score_anchors() -> None:
+    item = draft()
+    item.rubric[0].score_anchors.pop("4")
+
+    with pytest.raises(ValueError, match="score anchors"):
+        TaskPolicy.validate(item, [])

@@ -43,7 +43,11 @@ class GrowthService:
             TaskPolicy.validate(
                 draft, [(item.topic, self._aware(item.created_at)) for item in recent]
             )
-            task = LearningTaskRecord(skill_name=skill, status="ready", **draft.model_dump())
+            task = LearningTaskRecord(
+                skill_name=skill,
+                status="ready",
+                **draft.model_dump(exclude_defaults=True),
+            )
             db.add(task)
             db.commit()
             return task
@@ -65,7 +69,11 @@ class GrowthService:
 
     def save_draft(self, draft: TaskDraft, skill: str) -> LearningTaskRecord:
         with self.session_factory() as db:
-            task = LearningTaskRecord(skill_name=skill, status="ready", **draft.model_dump())
+            task = LearningTaskRecord(
+                skill_name=skill,
+                status="ready",
+                **draft.model_dump(exclude_defaults=True),
+            )
             db.add(task)
             db.commit()
             return task
