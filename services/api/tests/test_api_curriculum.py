@@ -107,6 +107,37 @@ def test_today_task_is_reconciled_after_switching_primary_track(authenticated_cl
     assert today.json()["replaces_task_id"] == first["id"]
 
 
+def test_today_task_can_return_to_a_previously_replaced_stage(authenticated_client) -> None:
+    client, csrf = authenticated_client
+    client.app.state.services.curriculum.set_algorithm_frequency(0)
+    foundation = client.post(
+        "/api/v1/tasks/generate",
+        headers={"X-CSRF-Token": csrf},
+        json={"topic": "curriculum", "skill": "curriculum"},
+    ).json()
+
+    client.put(
+        "/api/v1/curriculum/target-stage",
+        headers={"X-CSRF-Token": csrf},
+        json={"stage_key": "practice"},
+    )
+    practice = client.get("/api/v1/tasks/today")
+    assert practice.status_code == 200
+    assert practice.json()["stage_key"] == "practice"
+
+    client.put(
+        "/api/v1/curriculum/target-stage",
+        headers={"X-CSRF-Token": csrf},
+        json={"stage_key": "foundation"},
+    )
+    returned = client.get("/api/v1/tasks/today")
+
+    assert returned.status_code == 200
+    assert returned.json()["stage_key"] == "foundation"
+    assert returned.json()["node_key"] == foundation["node_key"]
+    assert returned.json()["replaces_task_id"] == practice.json()["id"]
+
+
 def test_remediation_from_another_track_does_not_override_active_route(
     authenticated_client,
 ) -> None:

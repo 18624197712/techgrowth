@@ -21,13 +21,20 @@ class DailyTaskService:
         if existing is not None and existing.node_key == node.key:
             return existing
         sources = self._sources_for(node)
+        recent_topics = self.growth.recent_topics()
+        if existing is not None:
+            recent_topics = [
+                item
+                for item in recent_topics
+                if item[0].casefold() != node.title.casefold()
+            ]
         settings = resolve_provider_settings(
             self.settings, self.provider_settings.provider_values()
         )
         draft = await AgentWorkflowService(settings).generate_daily_task(
             node=node,
             sources=sources,
-            recent_topics=self.growth.recent_topics(),
+            recent_topics=recent_topics,
         )
         if existing is None:
             return self.growth.save_draft(draft, node.title)
