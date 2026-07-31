@@ -52,6 +52,7 @@ class TaskDraft(BaseModel):
     solution_outline: str = ""
     replaces_task_id: str | None = None
     regeneration_reason: str = ""
+    generation_source: Literal["ai", "rules", "legacy"] = "legacy"
 
 
 class TaskPolicy:
@@ -72,6 +73,10 @@ class TaskPolicy:
                 raise ValueError("curriculum task requires constraints")
             if len(task.hints) != 3:
                 raise ValueError("curriculum task requires exactly three hint levels")
+            if len({item.strip().casefold() for item in task.hints}) != 3:
+                raise ValueError("curriculum task requires three distinct hint levels")
+            if any(len(item.strip()) < 12 for item in task.hints):
+                raise ValueError("curriculum hints must contain actionable guidance")
             if len(task.solution_outline.strip()) < 20:
                 raise ValueError("curriculum task requires a solution outline")
             if not task.deliverables:

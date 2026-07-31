@@ -15,6 +15,10 @@ const task = {
   track_key: 'ai',
   stage_key: 'foundation',
   node_key: 'ai-foundation-model-io',
+  track_label: 'Java + Spring Cloud',
+  stage_label: '初级基础',
+  node_order: 1,
+  node_total: 12,
   prerequisites: ['能够运行 Python 测试'],
   instructions: [
     { action: '创建成功与失败测试样本', minutes: 15, expected_result: '两个样本均可加载' },
@@ -56,6 +60,9 @@ const task = {
   solution_revealed_at: null,
   replaces_task_id: null,
   regeneration_reason: '',
+  generation_source: 'ai',
+  guidance_source: 'ai_validated',
+  guidance_reference_ids: ['source-1'],
   status: 'ready',
   created_at: '2026-07-30T08:10:00Z',
 }
@@ -71,6 +78,7 @@ const radarItem = {
   relevance: 0.9,
   relevance_reason: '与当前 Agent 学习阶段相关',
   published_at: '2026-07-29T10:00:00Z',
+  created_at: '2026-07-30T08:00:00Z',
 }
 
 const repository = {
@@ -165,11 +173,16 @@ function mockFetch(
         })
       if (url.endsWith('/curriculum'))
         return Response.json({
-          active_track_key: 'java', algorithm_days_per_week: 2, catalog_version: 'v2',
+          active_track_key: 'java', target_stage: 'foundation', algorithm_days_per_week: 2, catalog_version: 'v2',
           tracks: [
-            { key: 'java', label: 'Java + Spring Cloud', kind: 'primary', completed_nodes: 5, total_nodes: 12, current_stage: 'practice' },
-            { key: 'go', label: 'Go', kind: 'primary', completed_nodes: 0, total_nodes: 12, current_stage: 'foundation' },
-            { key: 'algorithms', label: '数据结构与算法', kind: 'secondary', completed_nodes: 2, total_nodes: 24, current_stage: 'foundation' },
+            { key: 'java', label: 'Java + Spring Cloud', kind: 'primary', completed_nodes: 5, total_nodes: 12, current_stage: 'practice', stages: [
+              { key: 'foundation', label: '初级', nodes: [{ key: 'java-1', order: 1, title: 'Java 核心语义', completed: true }] },
+              { key: 'practice', label: '中级', nodes: [{ key: 'java-4', order: 4, title: 'Spring Boot 服务', completed: false }] },
+              { key: 'production', label: '高级', nodes: [{ key: 'java-7', order: 7, title: '生产可观测性', completed: false }] },
+              { key: 'architecture', label: '架构师', nodes: [{ key: 'java-10', order: 10, title: '微服务边界设计', completed: false }] },
+            ] },
+            { key: 'go', label: 'Go', kind: 'primary', completed_nodes: 0, total_nodes: 12, current_stage: 'foundation', stages: [] },
+            { key: 'algorithms', label: '数据结构与算法', kind: 'secondary', completed_nodes: 2, total_nodes: 24, current_stage: 'foundation', stages: [] },
           ],
         })
       if (url.endsWith('/curriculum/active-track') || url.endsWith('/curriculum/algorithm-frequency'))
@@ -178,6 +191,11 @@ function mockFetch(
           algorithm_days_per_week: 3,
           catalog_version: 'v2',
           tracks: [],
+        })
+      if (url.endsWith('/curriculum/target-stage'))
+        return Response.json({
+          active_track_key: 'java', target_stage: 'architecture', algorithm_days_per_week: 2,
+          catalog_version: 'v2', tracks: [],
         })
       if (url.endsWith('/chat/stream'))
         return new Response(tutorBody, { headers: { 'Content-Type': 'text/event-stream' } })
@@ -216,6 +234,10 @@ describe('TechGrowth app', () => {
     expect(screen.getByText(task.theory_brief)).toBeInTheDocument()
     expect(screen.getByText(task.problem_statement)).toBeInTheDocument()
     expect(screen.getByText(task.constraints[0])).toBeInTheDocument()
+    expect(screen.getByText('Java + Spring Cloud')).toBeInTheDocument()
+    expect(screen.getByText('初级基础')).toBeInTheDocument()
+    expect(screen.getByText('AI 出题')).toBeInTheDocument()
+    expect(screen.getByText('AI 生成并校验')).toBeInTheDocument()
   })
 
   it('reveals tiered guidance and regenerates an unclear task', async () => {
@@ -243,6 +265,8 @@ describe('TechGrowth app', () => {
     await screen.findByRole('heading', { name: task.title })
 
     await user.click(screen.getByRole('button', { name: '技术雷达' }))
+    expect(await screen.findByText(/原文发布/)).toBeInTheDocument()
+    expect(screen.getByText(/本站抓取/)).toBeInTheDocument()
     expect(await screen.findByText('5/11 个来源成功')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '立即刷新' }))
     expect(await screen.findByText('6/11 个来源成功')).toBeInTheDocument()
@@ -317,9 +341,10 @@ describe('TechGrowth app', () => {
     await user.click(screen.getByRole('button', { name: '数据中台' }))
 
     expect(await screen.findByRole('heading', { name: '成长数据总览' })).toBeInTheDocument()
-    expect(screen.getByText('164')).toBeInTheDocument()
+    expect(await screen.findByText('164')).toBeInTheDocument()
     expect(screen.getByText('通过审阅任务的计划分钟数')).toBeInTheDocument()
     expect(screen.getByText('Java + Spring Cloud')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '路线完成度图表' })).toBeInTheDocument()
   })
 
   it('switches the selected primary curriculum without clearing progress', async () => {
@@ -336,6 +361,21 @@ describe('TechGrowth app', () => {
     await user.click(screen.getByRole('button', { name: '将 Go 设为主路线' }))
 
     expect(switchBody).toEqual({ track_key: 'go' })
+  })
+
+  it('selects architect difficulty from the curriculum center', async () => {
+    let difficultyBody: unknown
+    mockFetch(true, (url, init) => {
+      if (url.endsWith('/curriculum/target-stage')) difficultyBody = JSON.parse(String(init?.body))
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: task.title })
+
+    await user.click(screen.getByRole('button', { name: '课程中心' }))
+    await user.click(screen.getByRole('button', { name: '架构师' }))
+
+    expect(difficultyBody).toEqual({ stage_key: 'architecture' })
   })
 
   it('validates a GitHub token and imports matching repositories', async () => {

@@ -4,16 +4,24 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 
 from ..dependencies import csrf_user, current_user
-from ..models import LearningTaskRecord, ReviewRecord, User, WeeklyReviewRecord
+from ..domain.curriculum import CURRICULUM
+from ..models import ReviewRecord, User, WeeklyReviewRecord
 from ..schemas import (
     ActiveTrackRequest,
     AlgorithmFrequencyRequest,
     SubmissionRequest,
+    TargetStageRequest,
     TaskGenerateRequest,
     TaskRegenerateRequest,
 )
 
 router = APIRouter(tags=["growth"])
+STAGE_LABELS = {
+    "foundation": "初级基础",
+    "practice": "中级实践",
+    "production": "高级工程",
+    "architecture": "架构师",
+}
 
 
 @router.get("/curriculum")
@@ -43,7 +51,29 @@ def set_algorithm_frequency(
     return request.app.state.services.curriculum.payload()
 
 
+@router.put("/curriculum/target-stage")
+def set_target_stage(
+    payload: TargetStageRequest, request: Request, _: User = Depends(csrf_user)
+) -> dict:
+    try:
+        request.app.state.services.curriculum.set_target_stage(payload.stage_key)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return request.app.state.services.curriculum.payload()
+
+
 def task_dict(task) -> dict:
+    track_label = task.track_key
+    node_order = 0
+    node_total = 0
+    try:
+        track = CURRICULUM.track(task.track_key)
+        node = CURRICULUM.node(task.node_key)
+        track_label = track.label
+        node_order = node.order
+        node_total = len(track.nodes)
+    except StopIteration:
+        pass
     return {
         "id": task.id,
         "title": task.title,
@@ -55,6 +85,10 @@ def task_dict(task) -> dict:
         "track_key": task.track_key,
         "stage_key": task.stage_key,
         "node_key": task.node_key,
+        "track_label": track_label,
+        "stage_label": STAGE_LABELS.get(task.stage_key, task.stage_key),
+        "node_order": node_order,
+        "node_total": node_total,
         "prerequisites": task.prerequisites,
         "instructions": task.instructions,
         "source_ids": task.source_ids,
@@ -77,6 +111,11 @@ def task_dict(task) -> dict:
         "solution_revealed_at": task.solution_revealed_at,
         "replaces_task_id": task.replaces_task_id,
         "regeneration_reason": task.regeneration_reason,
+        "generation_source": task.generation_source,
+        "guidance_source": (
+            "ai_validated" if task.generation_source == "ai" else "curriculum_template"
+        ),
+        "guidance_reference_ids": task.source_ids,
         "status": task.status,
         "created_at": task.created_at,
     }
@@ -118,6 +157,8 @@ def reveal_task_solution(task_id: str, request: Request, _: User = Depends(csrf_
         return task_dict(request.app.state.services.growth.reveal_solution(task_id))
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/tasks/generate", status_code=status.HTTP_201_CREATED)
@@ -180,6 +221,7 @@ def radar(request: Request, _: User = Depends(current_user)) -> list[dict]:
             "relevance": item.relevance,
             "relevance_reason": item.relevance_reason,
             "published_at": item.published_at,
+            "created_at": item.created_at,
         }
         for item in request.app.state.services.radar.list_items()
     ]
@@ -196,14 +238,10 @@ async def refresh_radar(request: Request, _: User = Depends(csrf_user)) -> dict:
 
 
 @router.get("/tasks/today")
-def today_task(request: Request, _: User = Depends(current_user)) -> dict:
-    with request.app.state.database.session_factory() as db:
-        task = db.scalar(
-            select(LearningTaskRecord).order_by(LearningTaskRecord.created_at.desc()).limit(1)
-        )
-        if not task:
-            raise HTTPException(404, "No task is ready for today")
-        return task_dict(task)
+async def today_task(request: Request, _: User = Depends(current_user)) -> dict:
+    if request.app.state.services.growth.today_task() is None:
+        raise HTTPException(404, "No task is ready for today")
+    return task_dict(await request.app.state.services.daily_tasks.generate())
 
 
 @router.get("/reviews/{submission_id}")

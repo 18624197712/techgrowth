@@ -23,6 +23,8 @@ def test_growth_service_advances_after_curriculum_task_passes(client) -> None:
 
 def test_growth_service_prioritizes_curriculum_remediation(client) -> None:
     growth = client.app.state.services.growth
+    client.app.state.services.curriculum.switch_track("go")
+    client.app.state.services.curriculum.set_algorithm_frequency(0)
     node = CURRICULUM.track("go").nodes[0]
     draft = client.app.state.services.daily_tasks.fallback_for(node, ["source-1"])
     draft.is_remediation = True

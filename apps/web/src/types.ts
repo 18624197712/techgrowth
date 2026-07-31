@@ -25,6 +25,10 @@ export type LearningTask = {
   track_key: string
   stage_key: string
   node_key: string
+  track_label: string
+  stage_label: string
+  node_order: number
+  node_total: number
   prerequisites: string[]
   instructions: Array<string | TaskStep>
   source_ids: string[]
@@ -45,6 +49,9 @@ export type LearningTask = {
   solution_revealed_at: string | null
   replaces_task_id: string | null
   regeneration_reason: string
+  generation_source: 'ai' | 'rules' | 'legacy'
+  guidance_source: 'ai_validated' | 'curriculum_template'
+  guidance_reference_ids: string[]
   status: string
   created_at: string
 }
@@ -81,10 +88,18 @@ export type CurriculumTrack = {
   completed_nodes: number
   total_nodes: number
   current_stage: string
+  stages: CurriculumStage[]
+}
+
+export type CurriculumStage = {
+  key: 'foundation' | 'practice' | 'production' | 'architecture'
+  label: string
+  nodes: Array<{ key: string; order: number; title: string; completed: boolean }>
 }
 
 export type CurriculumState = {
   active_track_key: string
+  target_stage: 'foundation' | 'practice' | 'production' | 'architecture'
   algorithm_days_per_week: number
   catalog_version: string
   tracks: CurriculumTrack[]
@@ -101,6 +116,7 @@ export type RadarItem = {
   relevance: number
   relevance_reason: string
   published_at: string
+  created_at: string
 }
 
 export type RadarStatus = {

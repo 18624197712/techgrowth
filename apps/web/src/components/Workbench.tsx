@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   BarChart3, Bell, Bot, CheckCircle2, ChevronRight, CircleGauge, Code2, ExternalLink,
   FileCheck2, GitBranch, History, LoaderCircle, LogOut, Menu, Radar, RefreshCw,
@@ -13,7 +13,8 @@ import type {
 } from '../types'
 import { ChatDrawer } from './ChatDrawer'
 import { CurriculumCenter } from './CurriculumCenter'
-import { DataPlatform } from './DataPlatform'
+
+const DataPlatform = lazy(() => import('./DataPlatform').then((module) => ({ default: module.DataPlatform })))
 
 type View = 'today' | 'analytics' | 'curriculum' | 'radar' | 'repositories' | 'growth' | 'weekly' | 'settings'
 const navItems: { id: View; label: string; icon: typeof Target }[] = [
@@ -83,8 +84,8 @@ export function Workbench({ user, onLogout }: { user: User; onLogout: () => void
     if (loading) return <div className="loading-state"><LoaderCircle className="spin" /><span>正在载入</span></div>
     if (error) return <div className="error-state"><XCircle /><p>{error}</p><button onClick={() => void load()}><RefreshCw size={16} />重试</button></div>
     if (view === 'today') return <TodayView task={task} radar={radar} onTask={setTask} onProfile={setProfile} />
-    if (view === 'analytics') return <DataPlatform />
-    if (view === 'curriculum') return <CurriculumCenter />
+    if (view === 'analytics') return <Suspense fallback={<div className="loading-state compact-state"><LoaderCircle className="spin" /><span>正在载入图表</span></div>}><DataPlatform /></Suspense>
+    if (view === 'curriculum') return <CurriculumCenter onTrackChange={load} />
     if (view === 'radar') return <RadarView items={radar} selected={selectedRadar} onSelect={setSelectedRadar} onReload={load} />
     if (view === 'repositories') return <RepositoryView items={repositories} onReload={async () => setRepositories(await api<Repository[]>('/repositories'))} />
     if (view === 'growth') return <GrowthView skills={profile} />
@@ -139,6 +140,8 @@ function TodayView({ task, radar, onTask, onProfile }: { task: LearningTask | nu
   const [scores, setScores] = useState<Record<string, number>>({ correctness: 3, testing: 3 })
   const [result, setResult] = useState<{ passed: boolean; feedback: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [guidanceBusy, setGuidanceBusy] = useState('')
+  const [guidanceError, setGuidanceError] = useState('')
 
   async function generate() {
     setBusy(true)
@@ -174,19 +177,32 @@ function TodayView({ task, radar, onTask, onProfile }: { task: LearningTask | nu
 
   async function revealHint(level: number) {
     if (!task) return
-    onTask(await api<LearningTask>(`/tasks/${task.id}/hints/${level}/reveal`, { method: 'POST' }))
+    setGuidanceBusy(`hint-${level}`); setGuidanceError('')
+    try { onTask(await api<LearningTask>(`/tasks/${task.id}/hints/${level}/reveal`, { method: 'POST' })) }
+    catch (reason) { setGuidanceError(reason instanceof Error ? reason.message : '提示读取失败') }
+    finally { setGuidanceBusy('') }
   }
 
   async function revealSolution() {
     if (!task) return
-    onTask(await api<LearningTask>(`/tasks/${task.id}/solution/reveal`, { method: 'POST' }))
+    setGuidanceBusy('solution'); setGuidanceError('')
+    try { onTask(await api<LearningTask>(`/tasks/${task.id}/solution/reveal`, { method: 'POST' })) }
+    catch (reason) { setGuidanceError(reason instanceof Error ? reason.message : '解题思路读取失败') }
+    finally { setGuidanceBusy('') }
   }
 
   if (!task) return <section><SectionHeader eyebrow="今天" title="准备第一项成长任务" /><div className="empty-work"><Target size={28} /><p>从课程路线中选择当前最需要补强的技能。</p><button className="primary-button compact" onClick={() => void generate()} disabled={busy}><Sparkles size={17} />生成今日任务</button></div></section>
+  const relatedRadar = radar.filter((item) => task.source_ids.includes(item.id)).slice(0, 3)
 
   return (
     <section>
       <SectionHeader eyebrow="今日成长任务" title={task.title} action={<div className="task-actions"><span className="time-badge">{task.expected_minutes} 分钟</span><button className="secondary-button" onClick={() => void regenerate()} disabled={busy}><RefreshCw size={16} />重新出题</button></div>} />
+      <div className="task-context" aria-label="任务课程依据">
+        <span><strong>{task.track_label}</strong>{task.track_key === 'algorithms' ? '算法副线日' : '当前主路线'}</span>
+        <span><strong>{task.stage_label}</strong>难度等级</span>
+        <span><strong>{task.node_order}/{task.node_total}</strong>课程节点</span>
+        <span><strong>{task.generation_source === 'ai' ? 'AI 出题' : task.generation_source === 'rules' ? '规则兜底' : '历史任务'}</strong>生成来源</span>
+      </div>
       <div className="task-layout">
         <div className="task-main">
           <p className="task-objective">{task.objective}</p>
@@ -199,12 +215,12 @@ function TodayView({ task, radar, onTask, onProfile }: { task: LearningTask | nu
           {task.deliverables.length > 0 && <div className="content-section"><h2>必须提交</h2><ul>{task.deliverables.map((item) => <li key={item}>{item}</li>)}</ul></div>}
           {task.acceptance_checks.length > 0 && <div className="content-section"><h2>验收检查</h2><div className="check-list">{task.acceptance_checks.map((check) => <div key={`${check.method}-${check.instruction}`}><code>{check.instruction}</code><p>{check.expected_result}</p></div>)}</div></div>}
           <div className="content-section"><h2>验收 Rubric</h2><div className="rubric-list">{task.rubric.map((item) => <div className="rubric-row" key={item.key}><FileCheck2 size={17} /><div><strong>{item.label}</strong>{item.description && <p>{item.description}</p>}{item.score_anchors && <div className="score-anchors">{Object.entries(item.score_anchors).map(([score, label]) => <span key={score}><b>{score}</b>{label}</span>)}</div>}</div>{item.critical && <small>关键项</small>}<select aria-label={`${item.label}评分`} value={scores[item.key] ?? 3} onChange={(event) => setScores({ ...scores, [item.key]: Number(event.target.value) })}>{[0, 1, 2, 3, 4].map((score) => <option value={score} key={score}>{score} / 4</option>)}</select></div>)}</div></div>
-          <div className="content-section guidance-section"><h2>分层提示</h2>{task.revealed_hints.length > 0 && <ol>{task.revealed_hints.map((hint, index) => <li key={`${index}-${hint}`}>{hint}</li>)}</ol>}{task.revealed_hint_level < 3 && <button className="secondary-button" onClick={() => void revealHint(task.revealed_hint_level + 1)}>查看{['一级', '二级', '三级'][task.revealed_hint_level]}提示</button>}</div>
-          <div className="content-section guidance-section"><h2>解题思路</h2>{task.solution_outline ? <p>{task.solution_outline}</p> : <button className="secondary-button" onClick={() => void revealSolution()}>查看解题思路</button>}</div>
+          <div className="content-section guidance-section"><h2>分层提示</h2><p className="guidance-source"><ShieldCheck size={15} /><span>{task.guidance_source === 'ai_validated' ? 'AI 生成并校验' : '课程模板兜底'}</span><small>{task.guidance_reference_ids[0]?.startsWith('curriculum-') ? '课程目录' : `${task.guidance_reference_ids.length} 个关联技术来源`}</small></p>{task.revealed_hints.length > 0 && <ol>{task.revealed_hints.map((hint, index) => <li key={`${index}-${hint}`}><strong>{['概念切入', '任务拆分', '伪代码与关键 API'][index]}</strong><p>{hint}</p></li>)}</ol>}{task.revealed_hint_level < 3 && <button className="secondary-button" disabled={Boolean(guidanceBusy)} onClick={() => void revealHint(task.revealed_hint_level + 1)}>{guidanceBusy.startsWith('hint') && <LoaderCircle className="spin" size={15} />}查看{['一级', '二级', '三级'][task.revealed_hint_level]}提示</button>}</div>
+          <div className="content-section guidance-section"><h2>解题思路</h2>{task.solution_outline ? <p>{task.solution_outline}</p> : <button className="secondary-button" disabled={Boolean(guidanceBusy)} onClick={() => void revealSolution()}>{guidanceBusy === 'solution' && <LoaderCircle className="spin" size={15} />}查看解题思路</button>}{guidanceError && <p className="form-error" role="alert">{guidanceError}</p>}</div>
           <form className="submission-form" onSubmit={submit}><h2>提交成果</h2><label htmlFor="summary">成果摘要</label><textarea id="summary" value={summary} onChange={(event) => setSummary(event.target.value)} required minLength={5} /><label htmlFor="reference">Commit / PR / 报告引用</label><input id="reference" value={reference} onChange={(event) => setReference(event.target.value)} required /><button className="primary-button compact" disabled={busy}><CheckCircle2 size={17} />提交审阅</button></form>
           {result && <div className={`review-result ${result.passed ? 'passed' : 'retry'}`}><strong>{result.passed ? '审阅通过' : '需要补做'}</strong><p>{result.feedback}</p></div>}
         </div>
-        <aside className="context-rail"><h2>相关技术信号</h2>{radar.slice(0, 3).map((item) => <a href={item.source_url} target="_blank" rel="noreferrer" key={item.id}><span>{item.source_name}</span><strong>{item.title}</strong><small>{item.relevance_reason}</small></a>)}</aside>
+        <aside className="context-rail"><h2>本题内容来源</h2>{relatedRadar.map((item) => <a href={item.source_url} target="_blank" rel="noreferrer" key={item.id}><span>{item.source_name} · {formatRadarTime(item.published_at)}</span><strong>{item.title}</strong><small>{item.relevance_reason}</small></a>)}{relatedRadar.length === 0 && <div className="curriculum-reference"><Route size={18} /><strong>课程目录 {task.curriculum_version}</strong><small>{task.track_label} · {task.stage_label} · 节点 {task.node_order}/{task.node_total}</small></div>}</aside>
       </div>
     </section>
   )
@@ -224,7 +240,19 @@ function RadarView({ items, selected, onSelect, onReload }: { items: RadarItem[]
     catch (reason) { setError(reason instanceof Error ? reason.message : '刷新失败') }
     finally { setBusy(false) }
   }
-  return <section><SectionHeader eyebrow="技术雷达" title="值得关注的技术变化" action={<button className="secondary-button" onClick={() => void refresh()} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} />立即刷新</button>} />{status && <div className={`radar-status ${status.status}`}><strong>{status.successful_sources}/{status.total_sources} 个来源成功</strong><span>新增 {status.inserted_items} 条</span>{status.created_at && <time>{new Date(status.created_at).toLocaleString('zh-CN')}</time>}{status.failed_sources.length > 0 && <small>失败：{status.failed_sources.join('、')}</small>}</div>}{error && <p className="form-error" role="alert">{error}</p>}<div className="filter-row">{topics.map((item) => <button className={topic === item ? 'active' : ''} key={item} onClick={() => setTopic(item)}>{item}</button>)}</div><div className="radar-list">{filtered.map((item) => <article className={selected === item.id ? 'selected' : ''} key={item.id} onClick={() => onSelect(item.id)}><div className="radar-meta"><span>{item.source_name}</span><span>可信度 {Math.round(item.credibility * 100)}%</span><span>相关度 {Math.round(item.relevance * 100)}%</span></div><h2>{item.title}</h2><p>{item.summary}</p><footer><small>{item.relevance_reason}</small><a href={item.source_url} target="_blank" rel="noreferrer" title="打开来源"><ExternalLink size={16} /></a></footer></article>)}</div></section>
+  return <section><SectionHeader eyebrow="技术雷达" title="值得关注的技术变化" action={<button className="secondary-button" onClick={() => void refresh()} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} />立即刷新</button>} />{status && <div className={`radar-status ${status.status}`}><strong>{status.successful_sources}/{status.total_sources} 个来源成功</strong><span>新增 {status.inserted_items} 条</span>{status.created_at && <time>{new Date(status.created_at).toLocaleString('zh-CN')}</time>}{status.failed_sources.length > 0 && <small>失败：{status.failed_sources.join('、')}</small>}</div>}{error && <p className="form-error" role="alert">{error}</p>}<div className="filter-row">{topics.map((item) => <button className={topic === item ? 'active' : ''} key={item} onClick={() => setTopic(item)}>{item}</button>)}</div><div className="radar-list">{filtered.map((item) => <article className={selected === item.id ? 'selected' : ''} key={item.id} onClick={() => onSelect(item.id)}><div className="radar-meta"><span>{item.source_name}</span><span>可信度 {Math.round(item.credibility * 100)}%</span><span>相关度 {Math.round(item.relevance * 100)}%</span><time title={new Date(item.published_at).toLocaleString('zh-CN')}>原文发布 {formatRadarTime(item.published_at)}</time><time title={new Date(item.created_at).toLocaleString('zh-CN')}>本站抓取 {formatRadarTime(item.created_at)}</time></div><h2>{item.title}</h2><p>{item.summary}</p><footer><small>{item.relevance_reason}</small><a href={item.source_url} target="_blank" rel="noreferrer" title="打开来源"><ExternalLink size={16} /></a></footer></article>)}</div></section>
+}
+
+function formatRadarTime(value: string) {
+  const date = new Date(value)
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const days = Math.round((start - target) / 86_400_000)
+  const clock = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (days === 0) return `今天 ${clock}`
+  if (days === 1) return `昨天 ${clock}`
+  return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function RepositoryView({ items, onReload }: { items: Repository[]; onReload: () => Promise<void> }) {

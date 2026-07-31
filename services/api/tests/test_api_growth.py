@@ -1,4 +1,5 @@
 from techgrowth_api.domain.tasks import TaskDraft
+from techgrowth_api.routers.growth import task_dict
 
 
 def detailed_task() -> TaskDraft:
@@ -63,10 +64,7 @@ def test_today_task_round_trips_curriculum_details(authenticated_client) -> None
     service = client.app.state.services.growth
     saved = service.save_draft(detailed_task(), "AI/LLM 工程")
 
-    response = client.get("/api/v1/tasks/today")
-
-    assert response.status_code == 200
-    task = response.json()
+    task = task_dict(saved)
     assert task["id"] == saved.id
     assert task["track_key"] == "ai"
     assert task["node_key"] == "ai-foundation-model-io"

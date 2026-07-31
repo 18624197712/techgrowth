@@ -1,5 +1,5 @@
 from ..config import Settings
-from ..domain.curriculum import CURRICULUM, LEGACY_CURRICULUM, CurriculumNode
+from ..domain.curriculum import CurriculumNode
 from ..integrations.provider_settings import resolve_provider_settings
 from ..workflows import AgentWorkflowService, build_curriculum_fallback
 
@@ -17,15 +17,10 @@ class DailyTaskService:
 
     async def generate(self):
         existing = self.growth.today_task()
-        if existing is not None:
-            return existing
         node = self.growth.next_curriculum_node()
-        radar_items = self.radar.list_items()[:5]
-        sources = [
-            {"id": item.id, "content": f"{item.title}\n{item.summary}"} for item in radar_items
-        ]
-        if not sources:
-            sources = [{"id": "curriculum-v1", "content": node.objective}]
+        if existing is not None and existing.node_key == node.key:
+            return existing
+        sources = self._sources_for(node)
         settings = resolve_provider_settings(
             self.settings, self.provider_settings.provider_values()
         )
@@ -34,6 +29,21 @@ class DailyTaskService:
             sources=sources,
             recent_topics=self.growth.recent_topics(),
         )
+        if existing is None:
+            return self.growth.save_draft(draft, node.title)
+        draft = draft.model_copy(
+            update={
+                "replaces_task_id": existing.id,
+                "regeneration_reason": "课程路线或等级已变更，自动对齐当前节点",
+            }
+        )
+        if existing.status in {"ready", "open"}:
+            return self.growth.replace_task(
+                existing.id,
+                draft,
+                node.title,
+                f"curriculum-sync:{existing.id}:{node.key}",
+            )
         return self.growth.save_draft(draft, node.title)
 
     async def generate_from_radar(self, radar_item_id: str):
@@ -62,17 +72,11 @@ class DailyTaskService:
             raise LookupError("Task not found")
         if task.status not in {"ready", "open"}:
             raise ValueError("已提交或已完成的任务不能重新出题")
-        catalog = CURRICULUM if task.curriculum_version == "v2" else LEGACY_CURRICULUM
-        try:
-            node = catalog.node(task.node_key)
-        except StopIteration as exc:
-            raise ValueError("旧任务没有可用于重新出题的课程节点") from exc
+        node = self.growth.next_curriculum_node()
         settings = resolve_provider_settings(
             self.settings, self.provider_settings.provider_values()
         )
-        sources = [
-            {"id": source_id, "content": task.objective} for source_id in task.source_ids
-        ] or [{"id": f"curriculum-{catalog.version}", "content": task.objective}]
+        sources = self._sources_for(node)
         draft = await AgentWorkflowService(settings).generate_daily_task(
             node=node,
             sources=sources,
@@ -81,8 +85,27 @@ class DailyTaskService:
                 for item in self.growth.recent_topics()
                 if item[0].casefold() != task.topic.casefold()
             ],
+            variation=(
+                f"重新出题原因：{reason}。必须保持课程节点和难度不变，但题目场景、"
+                f"问题描述和验收样例必须明显区别于上一题“{task.title}”。"
+            ),
         )
         draft = draft.model_copy(
             update={"replaces_task_id": task.id, "regeneration_reason": reason}
         )
         return self.growth.replace_task(task.id, draft, node.title, idempotency_key)
+
+    def _sources_for(self, node: CurriculumNode) -> list[dict]:
+        keywords = {item.casefold() for item in node.radar_keywords}
+        radar_items = [
+            item
+            for item in self.radar.list_items()
+            if any(
+                keyword in f"{item.title} {item.summary} {item.topic}".casefold()
+                for keyword in keywords
+            )
+        ][:5]
+        sources = [
+            {"id": item.id, "content": f"{item.title}\n{item.summary}"} for item in radar_items
+        ]
+        return sources or [{"id": "curriculum-v2", "content": node.objective}]

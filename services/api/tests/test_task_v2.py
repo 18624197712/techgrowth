@@ -18,7 +18,9 @@ def test_curriculum_fallback_contains_complete_learning_contract() -> None:
     assert len(task.problem_statement) >= 30
     assert task.constraints
     assert len(task.hints) == 3
+    assert len(set(task.hints)) == 3
     assert len(task.solution_outline) >= 20
+    assert task.generation_source == "rules"
     assert TaskPolicy.validate(task, []) is task
 
 

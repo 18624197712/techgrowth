@@ -81,6 +81,7 @@ class CurriculumStateRecord(Base):
     __tablename__ = "curriculum_state"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     active_track_key: Mapped[str] = mapped_column(String(40), default="java")
+    target_stage: Mapped[str] = mapped_column(String(40), default="foundation")
     algorithm_days_per_week: Mapped[int] = mapped_column(Integer, default=2)
     catalog_version: Mapped[str] = mapped_column(String(24), default="v2")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -141,6 +142,7 @@ class LearningTaskRecord(Base):
         ForeignKey("learning_tasks.id", ondelete="SET NULL"), nullable=True, index=True
     )
     regeneration_reason: Mapped[str] = mapped_column(Text, default="")
+    generation_source: Mapped[str] = mapped_column(String(24), default="legacy")
     regeneration_key: Mapped[str | None] = mapped_column(String(120), nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String(24), default="ready")
     is_remediation: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -28,6 +28,7 @@ def test_curriculum_and_agent_tables_expose_required_columns() -> None:
         "deliverables",
         "acceptance_checks",
         "remediation_hint",
+        "generation_source",
     } <= task_columns
     assert {"session_id", "action_type", "payload", "status", "expires_at"} <= set(
         AgentActionRecord.__table__.c.keys()

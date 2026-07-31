@@ -125,6 +125,7 @@ class GrowthService:
             task = db.get(LearningTaskRecord, task_id)
             if task is None:
                 raise LookupError("Task not found")
+            self._repair_guidance(task)
             if level > len(task.hints):
                 raise ValueError("该任务没有对应提示")
             task.revealed_hint_level = max(task.revealed_hint_level, level)
@@ -137,6 +138,7 @@ class GrowthService:
             task = db.get(LearningTaskRecord, task_id)
             if task is None:
                 raise LookupError("Task not found")
+            self._repair_guidance(task)
             task.solution_revealed_at = datetime.now(UTC)
             db.commit()
             db.expunge(task)
@@ -288,3 +290,19 @@ class GrowthService:
     @staticmethod
     def _aware(value: datetime) -> datetime:
         return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    @staticmethod
+    def _repair_guidance(task: LearningTaskRecord) -> None:
+        if len(task.hints) == 3 and len(task.solution_outline.strip()) >= 20:
+            return
+        from ..domain.curriculum import CURRICULUM
+        from ..workflows import build_curriculum_fallback
+
+        try:
+            node = CURRICULUM.node(task.node_key)
+        except StopIteration as exc:
+            raise ValueError("该历史任务缺少可恢复的课程提示，请重新出题") from exc
+        fallback = build_curriculum_fallback(node, task.source_ids or ["curriculum-v2"])
+        task.hints = fallback.hints
+        task.solution_outline = fallback.solution_outline
+        task.generation_source = "rules"

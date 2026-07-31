@@ -14,6 +14,7 @@ class TaskState(TypedDict, total=False):
     sources: list[dict]
     source_context: str
     task: TaskDraft
+    variation: str
 
 
 def build_untrusted_context(items: list[dict]) -> str:
@@ -31,10 +32,12 @@ def _score_anchors(subject: str) -> dict[str, str]:
     }
 
 
-def build_curriculum_fallback(node: CurriculumNode, source_ids: list[str]) -> TaskDraft:
+def build_curriculum_fallback(
+    node: CurriculumNode, source_ids: list[str], variation: str = ""
+) -> TaskDraft:
     task_kind = "algorithm" if node.track_key == "algorithms" else "coding"
     return TaskDraft(
-        title=f"实作：{node.title}",
+        title=f"{'专项练习' if variation else '实作'}：{node.title}",
         topic=node.title,
         expected_minutes=35,
         objective=node.objective,
@@ -125,6 +128,7 @@ def build_curriculum_fallback(node: CurriculumNode, source_ids: list[str]) -> Ta
             "参考思路：先定义输入、输出和不变量，把核心行为实现为可独立测试的最小单元；"
             "随后分别构造成功与失败样例，执行测试命令并把输出、取舍和改进点记录到报告。"
         ),
+        generation_source="rules",
     )
 
 
@@ -147,11 +151,16 @@ class AgentWorkflowService:
         node = state["node"]
         source_ids = [str(item["id"]) for item in state["sources"]]
         if not self.model.configured:
-            return {"task": build_curriculum_fallback(node, source_ids)}
+            return {
+                "task": build_curriculum_fallback(
+                    node, source_ids, state.get("variation", "")
+                )
+            }
         prompt = (
             f"Curriculum node: {node.key}\nStage: {node.stage_key}\n"
             f"Objective: {node.objective}\nPrerequisites: {list(node.prerequisites)}\n"
             f"Required deliverable kinds: {list(node.deliverable_kinds)}\n"
+            f"Variation requirement: {state.get('variation') or 'initial exercise'}\n"
             f"Allowed source IDs: {source_ids}\nSources: {state['source_context']}"
         )
         try:
@@ -159,7 +168,11 @@ class AgentWorkflowService:
                 "Design one concrete, evidence-backed 30-45 minute programming exercise. "
                 "Include theory, an explicit problem statement, constraints, three progressive "
                 "hints, a solution outline, structured steps, observable expected results, two "
-                "acceptance checks, and complete 0-4 rubric anchors. Return Chinese task content.",
+                "acceptance checks, and complete 0-4 rubric anchors. The three hints must progress "
+                "from concept, to decomposition, to pseudocode or key APIs. The solution outline "
+                "must explain reasoning and pseudocode without providing a complete "
+                "implementation. "
+                "Return Chinese task content grounded in the curriculum node and allowed sources.",
                 prompt,
                 TaskDraft,
             )
@@ -176,18 +189,26 @@ class AgentWorkflowService:
                     "stage_key": node.stage_key,
                     "node_key": node.key,
                     "topic": node.title,
+                    "generation_source": "ai",
                 }
             )
             TaskPolicy.validate(task, [])
             return {"task": task}
         except (ModelClientError, ValueError):
-            return {"task": build_curriculum_fallback(node, source_ids)}
+            return {
+                "task": build_curriculum_fallback(
+                    node, source_ids, state.get("variation", "")
+                )
+            }
 
     async def generate_daily_task(
         self,
         node: CurriculumNode,
         sources: list[dict],
         recent_topics: list[tuple[str, object]],
+        variation: str = "",
     ) -> TaskDraft:
-        result = await self.task_graph.ainvoke({"node": node, "sources": sources})
+        result = await self.task_graph.ainvoke(
+            {"node": node, "sources": sources, "variation": variation}
+        )
         return TaskPolicy.validate(result["task"], recent_topics)

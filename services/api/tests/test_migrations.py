@@ -45,4 +45,4 @@ def test_existing_v2_database_upgrades_to_head(tmp_path: Path) -> None:
         text=True,
     )
 
-    assert "0003" in current.stdout
+    assert "0004" in current.stdout
